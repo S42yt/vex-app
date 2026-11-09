@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
-import { useEffects } from "@/hooks/useEffects";
+import { useStore } from "@/lib/store";
+import { playerController } from "@/player/PlayerController";
 import { RATE_MAX, RATE_MIN, RATE_STEP } from "@/player/Effects";
 
 function EffectRow({
@@ -47,7 +48,8 @@ function EffectRow({
 }
 
 export const PlaybackEffects = memo(function PlaybackEffects() {
-	const { state, effects } = useEffects();
+	const { effects } = playerController;
+	const state = useStore(effects);
 	const drivePercent = Math.round(state.drive * 100);
 	const reverbPercent = Math.round(state.reverbMix * 100);
 	const engaged = state.rate !== 1 || state.drive > 0 || state.reverbMix > 0;

@@ -1,15 +1,15 @@
 import type { RemoteLibrary } from "@/api/types";
 import { bun } from "./rpc";
 import { sessionService } from "./SessionService";
+import { Store } from "@/lib/store";
 
 export interface LibraryDataState extends RemoteLibrary {
 	loading: boolean;
 	error: string | null;
 }
 
-export class LibraryData {
-	private subscribers = new Set<() => void>();
-	private snapshot: LibraryDataState = {
+export class LibraryData extends Store<LibraryDataState> {
+	protected snapshot: LibraryDataState = {
 		tracks: [],
 		artists: [],
 		playlists: [],
@@ -19,11 +19,8 @@ export class LibraryData {
 	private fetchSeq = 0;
 
 	constructor() {
-		let previousStatus = sessionService.getSnapshot().status;
-		sessionService.subscribe(() => {
-			const status = sessionService.getSnapshot().status;
-			if (status === previousStatus) return;
-			previousStatus = status;
+		super();
+		sessionService.onStatusChange((status) => {
 			if (status === "loggedIn") {
 				void this.refresh();
 			} else if (status === "loggedOut") {
@@ -38,13 +35,6 @@ export class LibraryData {
 			}
 		});
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): LibraryDataState => this.snapshot;
 
 	async refresh(): Promise<boolean> {
 		const seq = ++this.fetchSeq;
@@ -64,7 +54,7 @@ export class LibraryData {
 		if (seq !== this.fetchSeq) return true;
 		if (!result.ok) {
 			if (result.status === 401) {
-				sessionService.markExpired("Session expired — please log in again.");
+				sessionService.markExpired();
 			}
 			this.update({ loading: false, error: result.error });
 			return false;
@@ -78,11 +68,50 @@ export class LibraryData {
 		});
 		return true;
 	}
-
-	private update(patch: Partial<LibraryDataState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
-	}
 }
 
 export const libraryData = new LibraryData();
+
+interface LibraryViewState {
+	loading: boolean;
+	error: string | null;
+}
+
+// A store derived from the library: rebuilt when its sources change, with a failed
+// mutation's error standing until the next load.
+export abstract class LibraryView<S extends LibraryViewState> extends Store<S> {
+	private mutationError: string | null = null;
+	private builtFrom: readonly unknown[];
+
+	constructor() {
+		super();
+		this.builtFrom = this.sources(libraryData.getSnapshot());
+		libraryData.subscribe(() => this.apply());
+	}
+
+	protected abstract sources(data: LibraryDataState): readonly unknown[];
+	protected abstract rebuild(data: LibraryDataState): Partial<S>;
+	protected abstract syncQueue(): void;
+
+	protected fail(error: string): void {
+		this.mutationError = error;
+		this.update({ error } as Partial<S>);
+	}
+
+	private apply(): void {
+		const data = libraryData.getSnapshot();
+		if (data.loading) this.mutationError = null;
+		const status = {
+			loading: data.loading,
+			error: this.mutationError ?? data.error,
+		} as Partial<S>;
+		const sources = this.sources(data);
+		if (sources.every((source, i) => source === this.builtFrom[i])) {
+			this.update(status);
+			return;
+		}
+		this.builtFrom = sources;
+		this.update({ ...this.rebuild(data), ...status });
+		this.syncQueue();
+	}
+}

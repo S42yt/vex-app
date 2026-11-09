@@ -1,11 +1,11 @@
-import { navigationService } from "@/api/NavigationService";
+import { navigationService, sectionOf } from "@/api/NavigationService";
 import { SECTIONS, SECTION_ORDER } from "@/components/Sections";
-import { useNavigation } from "@/hooks/useNavigation";
 import { cn } from "@/lib/utils";
 import type { SectionName } from "@/api/NavigationService";
+import { useStore } from "@/lib/store";
 
 export function ViewSwitch() {
-	const { section } = useNavigation();
+	const section = sectionOf(useStore(navigationService));
 
 	return (
 		<div

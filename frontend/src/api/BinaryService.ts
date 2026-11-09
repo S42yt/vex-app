@@ -4,6 +4,7 @@ import type {
 	BinaryProgressMessage,
 } from "@/api/types";
 import { bun, onBunMessage } from "./rpc";
+import { Store } from "@/lib/store";
 
 export type BinaryPhase =
 	| "checking"
@@ -35,9 +36,8 @@ export interface BinariesState {
 	updateDismissed: boolean;
 }
 
-export class BinaryService {
-	private subscribers = new Set<() => void>();
-	private snapshot: BinariesState = {
+export class BinaryService extends Store<BinariesState> {
+	protected snapshot: BinariesState = {
 		phase: "checking",
 		missing: [],
 		progress: {},
@@ -50,13 +50,6 @@ export class BinaryService {
 		updateDismissed: false,
 	};
 	private updateCheckDone = false;
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): BinariesState => this.snapshot;
 
 	async refreshStatus(): Promise<void> {
 		let result;
@@ -212,11 +205,6 @@ export class BinaryService {
 				});
 				break;
 		}
-	}
-
-	private update(patch: Partial<BinariesState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

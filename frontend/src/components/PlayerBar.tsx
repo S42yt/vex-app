@@ -15,11 +15,12 @@ import { PlaybackEffects } from "@/components/PlaybackEffects";
 import { BAR_GHOST, modeToggle } from "@/components/playerBarChrome";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { usePlayer } from "@/hooks/usePlayer";
 import { formatTime } from "@/lib/utils";
+import { playerController } from "@/player/PlayerController";
+import { useStore } from "@/lib/store";
 
 export function PlayerBar() {
-	const { state, controller } = usePlayer();
+	const state = useStore(playerController);
 	const hasTrack = state.currentTrack !== null;
 	const hasQueue = state.tracks.length > 0;
 
@@ -27,7 +28,6 @@ export function PlayerBar() {
 		<footer className="relative isolate grid grid-cols-[1fr_2fr_1fr] items-center gap-4 border-t bg-card px-4 py-3">
 			<CoverBackdrop
 				coverUrl={state.currentTrack?.coverUrl}
-				controller={controller}
 				isPlaying={state.isPlaying}
 			/>
 
@@ -59,7 +59,7 @@ export function PlayerBar() {
 						variant="ghost"
 						size="icon"
 						aria-label={`Shuffle: ${state.shuffled ? "on" : "off"}`}
-						onClick={() => controller.toggleShuffle()}
+						onClick={() => playerController.toggleShuffle()}
 						className={modeToggle(state.shuffled)}
 					>
 						<Shuffle className="h-4 w-4" />
@@ -69,7 +69,7 @@ export function PlayerBar() {
 						size="icon"
 						aria-label="Previous track"
 						disabled={!hasQueue}
-						onClick={() => controller.previous()}
+						onClick={() => playerController.previous()}
 						className={BAR_GHOST}
 					>
 						<SkipBack className="h-5 w-5" />
@@ -79,7 +79,7 @@ export function PlayerBar() {
 						className="h-10 w-10 rounded-full"
 						aria-label={state.isPlaying ? "Pause" : "Play"}
 						disabled={!hasQueue}
-						onClick={() => controller.togglePlay()}
+						onClick={() => playerController.togglePlay()}
 					>
 						{state.isPlaying ? (
 							<Pause className="h-5 w-5" />
@@ -92,7 +92,7 @@ export function PlayerBar() {
 						size="icon"
 						aria-label="Next track"
 						disabled={!hasQueue}
-						onClick={() => controller.next()}
+						onClick={() => playerController.next()}
 						className={BAR_GHOST}
 					>
 						<SkipForward className="h-5 w-5" />
@@ -101,7 +101,7 @@ export function PlayerBar() {
 						variant="ghost"
 						size="icon"
 						aria-label={`Repeat: ${state.repeatMode}`}
-						onClick={() => controller.cycleRepeatMode()}
+						onClick={() => playerController.cycleRepeatMode()}
 						className={modeToggle(state.repeatMode !== "off")}
 					>
 						{state.repeatMode === "one" ? (
@@ -120,7 +120,7 @@ export function PlayerBar() {
 						max={state.durationSec || 1}
 						step={1}
 						disabled={!hasTrack}
-						onValueChange={([value]) => controller.seek(value)}
+						onValueChange={([value]) => playerController.seek(value)}
 						aria-label="Seek"
 					/>
 					<span className="w-12 text-xs tabular-nums text-muted-foreground">
@@ -135,7 +135,7 @@ export function PlayerBar() {
 					variant="ghost"
 					size="icon"
 					aria-label={state.muted ? "Unmute" : "Mute"}
-					onClick={() => controller.toggleMute()}
+					onClick={() => playerController.toggleMute()}
 					className={BAR_GHOST}
 				>
 					{state.muted || state.volume === 0 ? (
@@ -148,7 +148,7 @@ export function PlayerBar() {
 					value={[state.muted ? 0 : state.volume]}
 					max={1}
 					step={0.01}
-					onValueChange={([value]) => controller.setVolume(value)}
+					onValueChange={([value]) => playerController.setVolume(value)}
 					className="w-24"
 					aria-label="Volume"
 				/>

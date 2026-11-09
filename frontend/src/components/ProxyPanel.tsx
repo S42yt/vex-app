@@ -3,16 +3,17 @@ import { Group, SettingRow } from "@/components/SettingsControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSecondsUntil } from "@/hooks/useSecondsUntil";
-import { useSession } from "@/hooks/useSession";
 import {
 	INVALID_PROXY_MESSAGE,
 	PROXY_PLACEHOLDER,
 	parseProxyUrl,
 } from "@/lib/urls";
 import { formatTime } from "@/lib/utils";
+import { sessionService } from "@/api/SessionService";
+import { useStore } from "@/lib/store";
 
 export function ProxyPanel() {
-	const { session, service } = useSession();
+	const session = useStore(sessionService);
 	const [address, setAddress] = useState(session.proxyUrl);
 	const [invalid, setInvalid] = useState(false);
 	const waitSec = useSecondsUntil(session.proxyRetryAfter);
@@ -27,7 +28,7 @@ export function ProxyPanel() {
 			setInvalid(true);
 			return;
 		}
-		void service.setProxy(proxyUrl);
+		void sessionService.setProxy(proxyUrl);
 	};
 
 	return (

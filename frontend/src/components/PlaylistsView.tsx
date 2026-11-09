@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ListMusic, Loader2, Plus } from "lucide-react";
-import { openIdOf } from "@/api/NavigationService";
+import { navigationService, openIdOf } from "@/api/NavigationService";
 import { playlistQueueContext, playlistService } from "@/api/PlaylistService";
 import {
 	CollectionCard,
@@ -15,18 +15,17 @@ import { PlaylistDialog } from "@/components/PlaylistDialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useLibrary } from "@/hooks/useLibrary";
-import { useNavigation } from "@/hooks/useNavigation";
-import { usePlayer } from "@/hooks/usePlayer";
-import { usePlaylists } from "@/hooks/usePlaylists";
 import { trackCountLabel } from "@/lib/utils";
 import type { RemotePlaylist } from "@/api/types";
+import { libraryService } from "@/api/LibraryService";
+import { useStore } from "@/lib/store";
+import { playerController } from "@/player/PlayerController";
 
 export function PlaylistsView() {
-	const { playlists: state } = usePlaylists();
-	const { view, service: navigation } = useNavigation();
-	const { state: playerState } = usePlayer();
-	const { library } = useLibrary();
+	const state = useStore(playlistService);
+	const view = useStore(navigationService);
+	const playerState = useStore(playerController);
+	const library = useStore(libraryService);
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [editing, setEditing] = useState<RemotePlaylist | null>(null);
 	const [pendingDelete, setPendingDelete] = useState<RemotePlaylist | null>(
@@ -60,7 +59,7 @@ export function PlaylistsView() {
 			: null;
 
 	useEffect(() => {
-		if (openId !== null && open === null) navigation.openPlaylist(null);
+		if (openId !== null && open === null) navigationService.openPlaylist(null);
 	}, [openId, open, navigation]);
 
 	const firstLoad = state.loading && state.playlists.length === 0;
@@ -70,7 +69,7 @@ export function PlaylistsView() {
 			{open ? (
 				<PlaylistDetail
 					playlist={open}
-					onBack={() => navigation.openPlaylist(null)}
+					onBack={() => navigationService.openPlaylist(null)}
 					onEdit={() => openEdit(open)}
 				/>
 			) : (
@@ -129,7 +128,7 @@ export function PlaylistsView() {
 														? `Pause ${playlist.name}`
 														: `Play ${playlist.name}`
 												}
-												onOpen={() => navigation.openPlaylist(playlist.id)}
+												onOpen={() => navigationService.openPlaylist(playlist.id)}
 												onPlay={
 													tracks.length > 0
 														? () => playlistService.playOrToggle(playlist)
@@ -168,7 +167,7 @@ export function PlaylistsView() {
 				onConfirm={() => {
 					if (!pendingDelete) return;
 					void playlistService.remove(pendingDelete.id);
-					if (openId === pendingDelete.id) navigation.openPlaylist(null);
+					if (openId === pendingDelete.id) navigationService.openPlaylist(null);
 				}}
 			/>
 		</div>

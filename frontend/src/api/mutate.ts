@@ -15,7 +15,7 @@ export async function mutate(
 	}
 	if (result.ok) return { ok: true };
 	if (result.status === 401) {
-		sessionService.markExpired("Session expired — please log in again.");
+		sessionService.markExpired();
 	}
 	return { ok: false, error: result.error };
 }

@@ -3,12 +3,13 @@ import type {
 	EditArtistParams,
 	RemoteArtist,
 } from "@/api/types";
-import { playerController } from "@/hooks/usePlayer";
+import { playerController } from "@/player/PlayerController";
 import { findMatchingArtist } from "@/lib/artistMatch";
 import type { Track } from "@/player/types";
 import { submitIdList } from "./idListEdit";
 import type { IdListDraft } from "./idListEdit";
-import { libraryData } from "./LibraryData";
+import { LibraryView, libraryData } from "./LibraryData";
+import type { LibraryDataState } from "./LibraryData";
 import { libraryService } from "./LibraryService";
 import { mutate } from "./mutate";
 import type { MutationResult } from "./mutate";
@@ -24,27 +25,12 @@ export interface ArtistsState {
 	error: string | null;
 }
 
-export class ArtistService {
-	private subscribers = new Set<() => void>();
-	private snapshot: ArtistsState = {
+export class ArtistService extends LibraryView<ArtistsState> {
+	protected snapshot: ArtistsState = {
 		artists: [],
 		loading: false,
 		error: null,
 	};
-	private mutationError: string | null = null;
-	private builtFrom: RemoteArtist[] = libraryData.getSnapshot().artists;
-
-	constructor() {
-		libraryData.subscribe(() => this.apply());
-	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): ArtistsState => this.snapshot;
-
 	tracksOf(artist: RemoteArtist): Track[] {
 		return libraryService.tracksOfArtist(artist.id);
 	}
@@ -64,23 +50,17 @@ export class ArtistService {
 		);
 	}
 
-	private apply(): void {
-		const data = libraryData.getSnapshot();
-		if (data.loading) this.mutationError = null;
-		const error = this.mutationError ?? data.error;
-		if (data.artists === this.builtFrom) {
-			this.update({ loading: data.loading, error });
-			return;
-		}
-		this.builtFrom = data.artists;
-		const artists = [...data.artists].sort((a, b) =>
-			a.name.localeCompare(b.name),
-		);
-		this.update({ artists, loading: data.loading, error });
-		this.syncQueue();
+	protected sources(data: LibraryDataState): readonly unknown[] {
+		return [data.artists];
 	}
 
-	private syncQueue(): void {
+	protected rebuild(data: LibraryDataState): Partial<ArtistsState> {
+		return {
+			artists: [...data.artists].sort((a, b) => a.name.localeCompare(b.name)),
+		};
+	}
+
+	protected syncQueue(): void {
 		const context = playerController.queueContextId;
 		if (context === null) return;
 		const artist = this.snapshot.artists.find(
@@ -154,16 +134,6 @@ export class ArtistService {
 		);
 		if (result.ok) void libraryData.refresh();
 		else this.fail(result.error);
-	}
-
-	private fail(error: string): void {
-		this.mutationError = error;
-		this.update({ error });
-	}
-
-	private update(patch: Partial<ArtistsState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

@@ -15,13 +15,14 @@ import { SettingsView } from "@/components/SettingsView";
 import { TrackList } from "@/components/TrackList";
 import { UploadReviewDialog } from "@/components/UploadReviewDialog";
 import { YtDlpUpdateBanner } from "@/components/YtDlpUpdateBanner";
-import { useBinaries } from "@/hooks/useBinaries";
-import { useDownloads } from "@/hooks/useDownloads";
-import { useLibrary } from "@/hooks/useLibrary";
-import { useNavigation } from "@/hooks/useNavigation";
-import { usePlayer } from "@/hooks/usePlayer";
-import { useSession } from "@/hooks/useSession";
 import type { MainViewName } from "@/api/NavigationService";
+import { binaryService } from "@/api/BinaryService";
+import { useStore } from "@/lib/store";
+import { libraryService } from "@/api/LibraryService";
+import { sessionService } from "@/api/SessionService";
+import { playerController } from "@/player/PlayerController";
+import { navigationService, sectionOf } from "@/api/NavigationService";
+import { downloadService } from "@/api/DownloadService";
 
 const VIEWS: Record<MainViewName, ComponentType> = {
 	library: TrackList,
@@ -32,12 +33,13 @@ const VIEWS: Record<MainViewName, ComponentType> = {
 };
 
 function App() {
-	const { state } = usePlayer();
-	const { session } = useSession();
-	const { binaries } = useBinaries();
-	const { library } = useLibrary();
-	const downloads = useDownloads();
-	const { view, section } = useNavigation();
+	const state = useStore(playerController);
+	const session = useStore(sessionService);
+	const binaries = useStore(binaryService);
+	const library = useStore(libraryService);
+	const downloads = useStore(downloadService);
+	const view = useStore(navigationService);
+	const section = sectionOf(view);
 	const MainViewComponent = VIEWS[view.name];
 	const { Aside } = SECTIONS[section];
 	if (binaries.phase !== "ready") return <BinarySetupScreen />;

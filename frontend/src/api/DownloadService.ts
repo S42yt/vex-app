@@ -1,6 +1,7 @@
 import { storage } from "@/lib/storage";
 import type { Track } from "@/player/types";
 import { bun } from "./rpc";
+import { Store } from "@/lib/store";
 
 export interface DownloadState {
 	activeIds: readonly string[];
@@ -10,16 +11,8 @@ export interface DownloadState {
 
 const NOTICE_MS = 6000;
 
-export class DownloadService {
-	private subscribers = new Set<() => void>();
-	private snapshot: DownloadState = { activeIds: [], error: null, done: null };
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): DownloadState => this.snapshot;
+export class DownloadService extends Store<DownloadState> {
+	protected snapshot: DownloadState = { activeIds: [], error: null, done: null };
 
 	download = async (track: Track): Promise<void> => {
 		if (this.snapshot.activeIds.includes(track.id)) return;
@@ -59,11 +52,6 @@ export class DownloadService {
 			}, NOTICE_MS);
 		}
 	};
-
-	private update(patch: Partial<DownloadState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
-	}
 }
 
 export const downloadService = new DownloadService();

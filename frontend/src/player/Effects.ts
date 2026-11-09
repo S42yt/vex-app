@@ -2,6 +2,7 @@ import { clamp } from "@/lib/utils";
 import type { GraphStage } from "./audioGraph";
 import { Drive } from "./Drive";
 import { Reverb } from "./Reverb";
+import { Store } from "@/lib/store";
 
 export const RATE_MIN = 0.5;
 export const RATE_MAX = 1.5;
@@ -16,26 +17,19 @@ export interface EffectsState {
 	reverbMix: number;
 }
 
-export class Effects implements GraphStage {
-	private subscribers = new Set<() => void>();
+export class Effects extends Store<EffectsState> implements GraphStage {
 	private rate = 1;
 	private preservePitch = false;
 	private readonly drive: Drive;
 	private readonly reverb = new Reverb();
-	private snapshot: EffectsState;
+	protected snapshot: EffectsState;
 
 	constructor(private readonly audio: HTMLAudioElement) {
+		super();
 		this.drive = new Drive(audio);
 		this.snapshot = this.buildSnapshot();
 		this.applyRate();
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): EffectsState => this.snapshot;
 
 	setRate(rate: number): void {
 		const next = clamp(rate, RATE_MIN, RATE_MAX, 1);
@@ -87,8 +81,7 @@ export class Effects implements GraphStage {
 	}
 
 	private commit(): void {
-		this.snapshot = this.buildSnapshot();
-		this.subscribers.forEach((notify) => notify());
+		this.publish(this.buildSnapshot());
 	}
 
 	private buildSnapshot(): EffectsState {

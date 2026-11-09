@@ -4,7 +4,9 @@ import { artistService } from "./ArtistService";
 import { bun } from "./rpc";
 import { libraryData } from "./LibraryData";
 import { libraryService } from "./LibraryService";
+import { mutate } from "./mutate";
 import { sessionService } from "./SessionService";
+import { Store } from "@/lib/store";
 
 export interface UploadItem {
 	id: string;
@@ -42,30 +44,19 @@ export interface ConfirmEdits {
 	coverBlob?: Blob | null;
 }
 
-export class UploadService {
-	private subscribers = new Set<() => void>();
+export class UploadService extends Store<UploadState> {
 	private items: UploadItem[] = [];
 	private staged: StagedUpload[] = [];
 	private reviewedCount = 0;
-	private snapshot: UploadState = { uploads: [], staged: [], reviewedCount: 0 };
+	protected snapshot: UploadState = { uploads: [], staged: [], reviewedCount: 0 };
 	private autoPlayed = false;
 
 	constructor() {
-		let previousStatus = sessionService.getSnapshot().status;
-		sessionService.subscribe(() => {
-			const status = sessionService.getSnapshot().status;
-			if (status === previousStatus) return;
-			previousStatus = status;
+		super();
+		sessionService.onStatusChange((status) => {
 			if (status === "loggedOut") this.cancelAll();
 		});
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): UploadState => this.snapshot;
 
 	async pick(): Promise<void> {
 		const result = await bun.pickTracks();
@@ -173,33 +164,25 @@ export class UploadService {
 		{ artistIds, coverBlob }: ConfirmEdits,
 	): Promise<void> {
 		const known = staged.playWhenReady ? libraryService.trackIds() : null;
-		try {
-			const result = await bun.confirmUpload({
-				stagedId: staged.id,
-				title: item.title,
-				artistIds,
-				coverBase64: coverBlob && (await blobToBase64(coverBlob)),
-			});
-			if (result.ok) {
-				if (await libraryData.refresh()) {
-					this.items = this.items.filter((i) => i !== item);
-					if (known) this.playLanded(known);
-				} else {
-					item.status = "error";
-					item.error = "Uploaded, but refreshing the library failed.";
-				}
-			} else {
-				item.status = "error";
-				item.error = result.error;
-				if (result.status === 401) {
-					sessionService.markExpired(
-						"Session expired — please log in again.",
-					);
-				}
-			}
-		} catch (err) {
+		const result = await mutate(
+			async () =>
+				bun.confirmUpload({
+					stagedId: staged.id,
+					title: item.title,
+					artistIds,
+					coverBase64: coverBlob && (await blobToBase64(coverBlob)),
+				}),
+			"Upload failed",
+		);
+		if (!result.ok) {
 			item.status = "error";
-			item.error = err instanceof Error ? err.message : "Upload failed";
+			item.error = result.error;
+		} else if (await libraryData.refresh()) {
+			this.items = this.items.filter((i) => i !== item);
+			if (known) this.playLanded(known);
+		} else {
+			item.status = "error";
+			item.error = "Uploaded, but refreshing the library failed.";
 		}
 		this.emit();
 	}
@@ -213,12 +196,11 @@ export class UploadService {
 	}
 
 	private emit(): void {
-		this.snapshot = {
+		this.publish({
 			uploads: [...this.items],
 			staged: [...this.staged],
 			reviewedCount: this.reviewedCount,
-		};
-		this.subscribers.forEach((notify) => notify());
+		});
 	}
 }
 

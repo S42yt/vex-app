@@ -1,9 +1,10 @@
 import { Check, UserCheck, UserPlus } from "lucide-react";
 import type { SuggestedArtist } from "@/api/UploadService";
 import { ArtistAvatar } from "@/components/ArtistAvatar";
-import { useArtists } from "@/hooks/useArtists";
 import { findMatchingArtist } from "@/lib/artistMatch";
 import { cn } from "@/lib/utils";
+import { artistService } from "@/api/ArtistService";
+import { useStore } from "@/lib/store";
 
 export function ArtistSuggestion({
 	suggestion,
@@ -16,7 +17,7 @@ export function ArtistSuggestion({
 	onCheckedChange: (checked: boolean) => void;
 	disabled?: boolean;
 }) {
-	const { artists: artistState } = useArtists();
+	const artistState = useStore(artistService);
 	const matched = findMatchingArtist(suggestion.name, artistState.artists);
 	const imageUrl = suggestion.imageBase64
 		? `data:${suggestion.imageMime ?? "image/jpeg"};base64,${suggestion.imageBase64}`

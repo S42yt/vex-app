@@ -9,11 +9,11 @@ import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useDiscover } from "@/hooks/useDiscover";
-import { useImports } from "@/hooks/useImports";
 import { cn, countLabel } from "@/lib/utils";
 import type { ImportJob } from "@/api/ImportService";
 import type { MediaSearchResult, SearchSource } from "@/api/types";
+import { discoverService } from "@/api/DiscoverService";
+import { useStore } from "@/lib/store";
 
 const RESULT_GRID = "grid grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-3 p-4";
 
@@ -24,8 +24,8 @@ interface ResultCard {
 }
 
 export function DiscoverView() {
-	const { discover, service } = useDiscover();
-	const { imports } = useImports();
+	const discover = useStore(discoverService);
+	const { imports } = useStore(importService);
 	const [input, setInput] = useState(discover.query);
 
 	const cards = useMemo<ResultCard[]>(
@@ -43,7 +43,7 @@ export function DiscoverView() {
 
 	const handleSubmit = (e: FormEvent) => {
 		e.preventDefault();
-		void service.search(input);
+		void discoverService.search(input);
 	};
 
 	const sourceLabel = PLATFORMS[discover.source].label;
@@ -58,7 +58,7 @@ export function DiscoverView() {
 					</span>
 				)}
 				<form className="ml-auto flex items-center gap-2" onSubmit={handleSubmit}>
-					<SourceToggle value={discover.source} onChange={service.setSource} />
+					<SourceToggle value={discover.source} onChange={discoverService.setSource} />
 					<SearchInput
 						value={input}
 						onChange={setInput}
@@ -84,13 +84,13 @@ export function DiscoverView() {
 			{discover.loading ? (
 				<ResultSkeletons />
 			) : cards.length > 0 ? (
-				<ResultGrid cards={cards} onDownload={service.download} />
+				<ResultGrid cards={cards} onDownload={discoverService.download} />
 			) : discover.error ? (
 				<EmptyState
 					icon={<AlertCircle className="h-8 w-8" />}
 					title="That search didn't come back."
 					action={
-						<Button variant="secondary" size="sm" onClick={service.retry}>
+						<Button variant="secondary" size="sm" onClick={discoverService.retry}>
 							<RotateCw className="h-4 w-4" />
 							Try again
 						</Button>

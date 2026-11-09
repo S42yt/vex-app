@@ -15,7 +15,6 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useArtists } from "@/hooks/useArtists";
 import { blobToBase64, tooLargeMessage } from "@/lib/utils";
 import type { Track } from "@/player/types";
 import {
@@ -23,6 +22,8 @@ import {
 	MAX_IMAGE_BYTES,
 	MAX_NAME_LENGTH,
 } from "@/lib/limits";
+import { artistService } from "@/api/ArtistService";
+import { useStore } from "@/lib/store";
 
 type CoverEdit =
 	| { kind: "unchanged" }
@@ -38,7 +39,7 @@ export function EditTrackDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { artists: artistState } = useArtists();
+	const artistState = useStore(artistService);
 	const [title, setTitle] = useState("");
 	const [cover, setCover] = useState<CoverEdit>({ kind: "unchanged" });
 	const [selected, setSelected] = useState<Set<number>>(new Set());

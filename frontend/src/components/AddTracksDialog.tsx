@@ -13,9 +13,10 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useLibrary } from "@/hooks/useLibrary";
 import type { RemotePlaylist } from "@/api/types";
 import type { Track } from "@/player/types";
+import { libraryService } from "@/api/LibraryService";
+import { useStore } from "@/lib/store";
 
 export function AddTracksDialog({
 	playlist,
@@ -26,7 +27,7 @@ export function AddTracksDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const { library } = useLibrary();
+	const library = useStore(libraryService);
 	const [query, setQuery] = useState("");
 
 	const visible = useMemo(() => {

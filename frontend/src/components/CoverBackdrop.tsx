@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAudioGlow } from "@/hooks/useAudioGlow";
 import { cn } from "@/lib/utils";
-import type { PlayerController } from "@/player/PlayerController";
 
 const FADE_MS = 700;
 
@@ -13,14 +12,12 @@ function topLayer(layers: CoverLayer[]): CoverLayer | undefined {
 
 export const CoverBackdrop = memo(function CoverBackdrop({
 	coverUrl,
-	controller,
 	isPlaying,
 }: {
 	coverUrl: string | undefined;
-	controller: PlayerController;
 	isPlaying: boolean;
 }) {
-	const glowRef = useAudioGlow(controller, isPlaying);
+	const glowRef = useAudioGlow(isPlaying);
 	const [layers, setLayers] = useState<CoverLayer[]>([]);
 	const nextId = useRef(0);
 

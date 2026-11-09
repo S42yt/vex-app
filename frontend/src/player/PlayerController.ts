@@ -4,18 +4,19 @@ import { PlaybackQueue } from "./PlaybackQueue";
 import type { Effects } from "./Effects";
 import type { Equalizer } from "./Equalizer";
 import type { PlayerState, RepeatMode, Track } from "./types";
+import { Store } from "@/lib/store";
 
 const REPEAT_CYCLE: RepeatMode[] = ["off", "all", "one"];
 
-export class PlayerController {
+export class PlayerController extends Store<PlayerState> {
 	private player = new AudioPlayer();
 	private queue = new PlaybackQueue();
 	private queueContext: string | null = null;
-	private subscribers = new Set<() => void>();
 	private error: string | null = null;
-	private snapshot: PlayerState;
+	protected snapshot: PlayerState;
 
 	constructor() {
+		super();
 		this.restoreSettings();
 		this.snapshot = this.buildSnapshot();
 
@@ -23,10 +24,10 @@ export class PlayerController {
 		this.player.on("pause", () => this.refresh());
 		this.player.on("timeupdate", () => this.refresh());
 		this.player.on("volumechange", () => this.refresh());
-		this.player.on("trackchange", () => this.refresh());
+		this.player.on("sourcechange", () => this.refresh());
 
 		this.player.on("durationchange", (duration) => {
-			const current = this.player.currentTrack;
+			const current = this.queue.current;
 			if (current && current.durationSec === 0 && duration > 0) {
 				this.queue.updateTrack(current.id, { durationSec: duration });
 			}
@@ -40,7 +41,7 @@ export class PlayerController {
 				return;
 			}
 			const next = this.queue.next(true);
-			this.player.load(next);
+			this.load(next);
 			if (next) void this.player.play();
 			this.refresh();
 		});
@@ -52,13 +53,6 @@ export class PlayerController {
 
 		this.player.equalizer.subscribe(() => this.persistEqualizer());
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): PlayerState => this.snapshot;
 
 	get analyser(): AnalyserNode | null {
 		return this.player.analyser;
@@ -94,15 +88,15 @@ export class PlayerController {
 	syncCollection(contextId: string, tracks: Track[]): void {
 		if (this.queueContext !== null && this.queueContext !== contextId) return;
 		this.queueContext = contextId;
-		const current = this.player.currentTrack;
+		const current = this.queue.current;
 		const index = current
 			? tracks.findIndex((track) => track.id === current.id)
 			: -1;
 		this.queue.replace(tracks, index);
 		if (current && index === -1) {
-			this.player.load(null);
+			this.load(null);
 		} else if (!current && tracks.length > 0) {
-			this.player.load(this.queue.start());
+			this.load(this.queue.start());
 		}
 		this.refresh();
 	}
@@ -110,7 +104,7 @@ export class PlayerController {
 	clearQueue(): void {
 		this.queueContext = null;
 		this.queue.replace([], -1);
-		this.player.load(null);
+		this.load(null);
 		this.refresh();
 	}
 
@@ -124,13 +118,13 @@ export class PlayerController {
 		const removed = this.queue.removeMatching(predicate);
 		if (removed.length === 0) return;
 		if (current && removed.includes(current)) {
-			this.player.load(this.queue.current);
+			this.load(this.queue.current);
 		}
 		this.refresh();
 	}
 
 	togglePlay(): void {
-		if (!this.player.currentTrack && this.queue.tracks.length > 0) {
+		if (!this.queue.current && this.queue.tracks.length > 0) {
 			this.queue.start();
 			this.startCurrent();
 			return;
@@ -142,7 +136,7 @@ export class PlayerController {
 		const track = this.queue.next(false);
 		if (!track) return;
 		const wasPlaying = this.player.isPlaying;
-		this.player.load(track);
+		this.load(track);
 		if (wasPlaying) void this.player.play();
 		this.refresh();
 	}
@@ -155,7 +149,7 @@ export class PlayerController {
 		const track = this.queue.previous();
 		if (!track) return;
 		const wasPlaying = this.player.isPlaying;
-		this.player.load(track);
+		this.load(track);
 		if (wasPlaying) void this.player.play();
 		this.refresh();
 	}
@@ -190,9 +184,13 @@ export class PlayerController {
 		this.refresh();
 	}
 
+	private load(track: Track | null): void {
+		this.player.load(track?.src ?? null);
+	}
+
 	private startCurrent(): void {
 		const track = this.queue.current ?? this.queue.start();
-		this.player.load(track);
+		this.load(track);
 		if (track) {
 			this.error = null;
 			void this.player.play();
@@ -228,7 +226,7 @@ export class PlayerController {
 	}
 
 	private buildSnapshot(): PlayerState {
-		const current = this.player.currentTrack;
+		const current = this.queue.current;
 		return {
 			queueContextId: this.queueContext,
 			tracks: this.queue.tracks,
@@ -246,7 +244,8 @@ export class PlayerController {
 	}
 
 	private refresh(): void {
-		this.snapshot = this.buildSnapshot();
-		this.subscribers.forEach((notify) => notify());
+		this.publish(this.buildSnapshot());
 	}
 }
+
+export const playerController = new PlayerController();

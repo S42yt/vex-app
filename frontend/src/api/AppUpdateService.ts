@@ -4,6 +4,7 @@ import type {
 } from "@/api/types";
 import { mutate } from "./mutate";
 import { bun, onBunMessage } from "./rpc";
+import { Store } from "@/lib/store";
 
 type AppUpdatePhase = "idle" | "downloading" | "ready" | "installing";
 
@@ -16,9 +17,8 @@ export interface AppUpdateState {
 	dismissed: boolean;
 }
 
-export class AppUpdateService {
-	private subscribers = new Set<() => void>();
-	private snapshot: AppUpdateState = {
+export class AppUpdateService extends Store<AppUpdateState> {
+	protected snapshot: AppUpdateState = {
 		latestVersion: null,
 		phase: "idle",
 		receivedBytes: 0,
@@ -27,13 +27,6 @@ export class AppUpdateService {
 		dismissed: false,
 	};
 	private checkDone = false;
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): AppUpdateState => this.snapshot;
 
 	async checkForUpdate(): Promise<void> {
 		if (this.checkDone) return;
@@ -103,11 +96,6 @@ export class AppUpdateService {
 				this.update({ phase: "idle", error: msg.error });
 				break;
 		}
-	}
-
-	private update(patch: Partial<AppUpdateState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

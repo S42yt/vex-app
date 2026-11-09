@@ -1,4 +1,4 @@
-import { playerController } from "@/hooks/usePlayer";
+import { playerController } from "@/player/PlayerController";
 import type { Track } from "@/player/types";
 import { MAX_TRACKS_PER_PLAYLIST } from "@/lib/limits";
 import type {
@@ -7,7 +7,8 @@ import type {
 	RemotePlaylist,
 } from "@/api/types";
 import { submitIdList } from "./idListEdit";
-import { libraryData } from "./LibraryData";
+import { LibraryView, libraryData } from "./LibraryData";
+import type { LibraryDataState } from "./LibraryData";
 import { libraryService } from "./LibraryService";
 import { mutate } from "./mutate";
 import type { MutationResult } from "./mutate";
@@ -24,35 +25,20 @@ export interface PlaylistsState {
 	error: string | null;
 }
 
-export class PlaylistService {
-	private subscribers = new Set<() => void>();
-	private snapshot: PlaylistsState = {
+export class PlaylistService extends LibraryView<PlaylistsState> {
+	protected snapshot: PlaylistsState = {
 		playlists: [],
 		loading: false,
 		error: null,
 	};
 	private pendingOrders = new Map<number, string[]>();
-	private mutationError: string | null = null;
-	private builtFrom: RemotePlaylist[] = libraryData.getSnapshot().playlists;
 
 	constructor() {
-		libraryData.subscribe(() => this.apply());
-
-		let previousStatus = sessionService.getSnapshot().status;
-		sessionService.subscribe(() => {
-			const status = sessionService.getSnapshot().status;
-			if (status === previousStatus) return;
-			previousStatus = status;
+		super();
+		sessionService.onStatusChange((status) => {
 			if (status === "loggedOut") this.pendingOrders.clear();
 		});
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): PlaylistsState => this.snapshot;
 
 	tracksOf(playlist: RemotePlaylist): Track[] {
 		return libraryService.tracksByIds(playlist.trackIds);
@@ -73,21 +59,17 @@ export class PlaylistService {
 		);
 	}
 
-	private apply(): void {
-		const data = libraryData.getSnapshot();
-		if (data.loading) this.mutationError = null;
-		const error = this.mutationError ?? data.error;
-		if (data.playlists === this.builtFrom) {
-			this.update({ loading: data.loading, error });
-			return;
-		}
-		this.builtFrom = data.playlists;
-		const playlists = data.playlists.map((playlist) => ({
-			...playlist,
-			trackIds: this.orderOf(playlist.id, [...new Set(playlist.trackIds)]),
-		}));
-		this.update({ playlists, loading: data.loading, error });
-		this.syncQueue();
+	protected sources(data: LibraryDataState): readonly unknown[] {
+		return [data.playlists];
+	}
+
+	protected rebuild(data: LibraryDataState): Partial<PlaylistsState> {
+		return {
+			playlists: data.playlists.map((playlist) => ({
+				...playlist,
+				trackIds: this.orderOf(playlist.id, [...new Set(playlist.trackIds)]),
+			})),
+		};
 	}
 
 	private orderOf(playlistId: number, serverTrackIds: string[]): string[] {
@@ -118,7 +100,7 @@ export class PlaylistService {
 		});
 	}
 
-	private syncQueue(): void {
+	protected syncQueue(): void {
 		const context = playerController.queueContextId;
 		if (context === null) return;
 		const playlist = this.snapshot.playlists.find(
@@ -249,16 +231,6 @@ export class PlaylistService {
 		return this.snapshot.playlists.find(
 			(playlist) => playlist.id === playlistId,
 		);
-	}
-
-	private fail(error: string): void {
-		this.mutationError = error;
-		this.update({ error });
-	}
-
-	private update(patch: Partial<PlaylistsState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

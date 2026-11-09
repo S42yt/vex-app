@@ -11,11 +11,12 @@ import {
 } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { Progress } from "@/components/ui/progress";
-import { useBinaries } from "@/hooks/useBinaries";
 import { INVALID_PROXY_MESSAGE, parseProxyUrl } from "@/lib/urls";
 import { formatMb } from "@/lib/utils";
 import type { BinaryName } from "@/api/types";
 import type { BinaryProgressInfo } from "@/api/BinaryService";
+import { binaryService } from "@/api/BinaryService";
+import { useStore } from "@/lib/store";
 
 const BINARY_INFO: Record<BinaryName, { name: string; purpose: string }> = {
 	ytDlp: { name: "yt-dlp", purpose: "media downloader" },
@@ -75,7 +76,7 @@ function InstallRow({
 }
 
 export function BinarySetupScreen() {
-	const { binaries, service } = useBinaries();
+	const binaries = useStore(binaryService);
 	const { phase } = binaries;
 	const [proxyAddress, setProxyAddress] = useState("");
 	const [invalid, setInvalid] = useState(false);
@@ -92,8 +93,8 @@ export function BinarySetupScreen() {
 			return;
 		}
 		void (phase === "error"
-			? service.retry(proxyUrl)
-			: service.install(proxyUrl));
+			? binaryService.retry(proxyUrl)
+			: binaryService.install(proxyUrl));
 	};
 
 	return (

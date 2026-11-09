@@ -1,13 +1,14 @@
 import { memo, useEffect } from "react";
 import { UpdateBanner } from "@/components/UpdateBanner";
-import { useBinaries } from "@/hooks/useBinaries";
+import { binaryService } from "@/api/BinaryService";
+import { useStore } from "@/lib/store";
 
 export const YtDlpUpdateBanner = memo(function YtDlpUpdateBanner() {
-	const { binaries, service } = useBinaries();
+	const binaries = useStore(binaryService);
 
 	useEffect(() => {
-		void service.checkForUpdate();
-	}, [service]);
+		void binaryService.checkForUpdate();
+	}, []);
 
 	if (binaries.updating) {
 		const progress = binaries.updateProgress;
@@ -28,7 +29,7 @@ export const YtDlpUpdateBanner = memo(function YtDlpUpdateBanner() {
 			<UpdateBanner
 				tone="error"
 				message={`yt-dlp update failed: ${binaries.updateError}`}
-				action={{ label: "Retry", onClick: () => void service.updateYtDlp() }}
+				action={{ label: "Retry", onClick: () => void binaryService.updateYtDlp() }}
 			/>
 		);
 	}
@@ -38,8 +39,8 @@ export const YtDlpUpdateBanner = memo(function YtDlpUpdateBanner() {
 	return (
 		<UpdateBanner
 			message={`yt-dlp ${binaries.latestVersion ?? "update"} is available.`}
-			action={{ label: "Update", onClick: () => void service.updateYtDlp() }}
-			onDismiss={() => service.dismissUpdate()}
+			action={{ label: "Update", onClick: () => void binaryService.updateYtDlp() }}
+			onDismiss={() => binaryService.dismissUpdate()}
 		/>
 	);
 });

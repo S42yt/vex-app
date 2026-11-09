@@ -8,14 +8,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useArtists } from "@/hooks/useArtists";
-import { useLibrary } from "@/hooks/useLibrary";
-import { usePlayer } from "@/hooks/usePlayer";
-import { usePlaylists } from "@/hooks/usePlaylists";
 import { useTrackActions } from "@/hooks/useTrackActions";
 import { formatTime, trackCountLabel } from "@/lib/utils";
 import type { RemoteArtist } from "@/api/types";
 import type { Track } from "@/player/types";
+import { useStore } from "@/lib/store";
+import { libraryService } from "@/api/LibraryService";
+import { playlistService } from "@/api/PlaylistService";
+import { playerController } from "@/player/PlayerController";
 
 export function ArtistDetail({
 	artist,
@@ -26,10 +26,10 @@ export function ArtistDetail({
 	onBack: () => void;
 	onEdit: () => void;
 }) {
-	const { state } = usePlayer();
-	const { library } = useLibrary();
-	const { artists } = useArtists();
-	const { playlists } = usePlaylists();
+	const state = useStore(playerController);
+	const library = useStore(libraryService);
+	const artists = useStore(artistService);
+	const playlists = useStore(playlistService);
 	const actions = useTrackActions();
 
 	const tracks = useMemo(

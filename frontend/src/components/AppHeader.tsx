@@ -5,13 +5,13 @@ import { HeaderAction } from "@/components/HeaderAction";
 import { ImportUrlButton } from "@/components/ImportUrlButton";
 import { Logo } from "@/components/Logo";
 import { ViewSwitch } from "@/components/ViewSwitch";
-import { useLibrary } from "@/hooks/useLibrary";
-import { useSession } from "@/hooks/useSession";
 import { cn } from "@/lib/utils";
+import { libraryService } from "@/api/LibraryService";
+import { useStore } from "@/lib/store";
+import { sessionService } from "@/api/SessionService";
 
 export function AppHeader() {
-	const { library } = useLibrary();
-	const { service: session } = useSession();
+	const library = useStore(libraryService);
 
 	const refresh = () => {
 		void libraryData.refresh();
@@ -44,7 +44,7 @@ export function AppHeader() {
 						icon={<LogOut />}
 						label="Log out"
 						className="hover:bg-destructive/10 hover:text-red-400"
-						onClick={() => void session.logout()}
+						onClick={() => void sessionService.logout()}
 					/>
 				</div>
 			</div>

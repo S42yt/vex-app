@@ -1,4 +1,5 @@
 import { bun } from "./rpc";
+import { Store } from "@/lib/store";
 
 export interface UninstallState {
 	removable: boolean | null;
@@ -6,21 +7,13 @@ export interface UninstallState {
 	running: boolean;
 }
 
-export class UninstallService {
-	private subscribers = new Set<() => void>();
-	private snapshot: UninstallState = {
+export class UninstallService extends Store<UninstallState> {
+	protected snapshot: UninstallState = {
 		removable: null,
 		error: null,
 		running: false,
 	};
 	private checking = false;
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): UninstallState => this.snapshot;
 
 	check = async (): Promise<void> => {
 		if (this.checking || this.snapshot.removable !== null) return;
@@ -49,11 +42,6 @@ export class UninstallService {
 			});
 		}
 	};
-
-	private update(patch: Partial<UninstallState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
-	}
 }
 
 export const uninstallService = new UninstallService();

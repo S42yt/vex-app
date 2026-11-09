@@ -29,7 +29,7 @@ import { playlistService } from "@/api/PlaylistService";
 import { presenceService } from "@/api/PresenceService";
 import { sessionService } from "@/api/SessionService";
 import { uninstallService } from "@/api/UninstallService";
-import { playerController } from "@/hooks/usePlayer";
+import { playerController } from "@/player/PlayerController";
 import { watchDevicePixelRatio } from "@/lib/devicePixelRatio";
 // Each store's own state type, so data written here that no longer matches the
 // app is a compile error rather than a wrong picture (render.ts type-checks this

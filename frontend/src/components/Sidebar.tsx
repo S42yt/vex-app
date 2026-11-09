@@ -1,13 +1,13 @@
 import { ListMusic, LibraryBig, Users } from "lucide-react";
-import { playlistQueueContext } from "@/api/PlaylistService";
+import { playlistQueueContext, playlistService } from "@/api/PlaylistService";
 import { SidebarPlaylistItem } from "@/components/SidebarPlaylistItem";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useArtists } from "@/hooks/useArtists";
-import { useLibrary } from "@/hooks/useLibrary";
-import { useNavigation } from "@/hooks/useNavigation";
-import { usePlayer } from "@/hooks/usePlayer";
-import { usePlaylists } from "@/hooks/usePlaylists";
 import { cn } from "@/lib/utils";
+import { artistService } from "@/api/ArtistService";
+import { useStore } from "@/lib/store";
+import { libraryService } from "@/api/LibraryService";
+import { playerController } from "@/player/PlayerController";
+import { navigationService } from "@/api/NavigationService";
 
 const NAV_ITEMS = [
 	{ view: "library", label: "Library", icon: LibraryBig },
@@ -18,11 +18,11 @@ const NAV_ITEMS = [
 type NavView = (typeof NAV_ITEMS)[number]["view"];
 
 export function Sidebar() {
-	const { view, service: navigation } = useNavigation();
-	const { library } = useLibrary();
-	const { playlists } = usePlaylists();
-	const { artists } = useArtists();
-	const { state: playerState } = usePlayer();
+	const view = useStore(navigationService);
+	const library = useStore(libraryService);
+	const playlists = useStore(playlistService);
+	const artists = useStore(artistService);
+	const playerState = useStore(playerController);
 
 	const counts: Record<NavView, number> = {
 		library: library.tracks.length,
@@ -51,7 +51,7 @@ export function Sidebar() {
 									: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
 							)}
 							aria-current={active ? "page" : undefined}
-							onClick={() => navigation.show(item.view)}
+							onClick={() => navigationService.show(item.view)}
 						>
 							<span
 								aria-hidden="true"
@@ -112,7 +112,7 @@ export function Sidebar() {
 										active={playlist.id === openPlaylistId}
 										ownsQueue={ownsQueue}
 										playing={ownsQueue && playerState.isPlaying}
-										onOpen={navigation.openPlaylist}
+										onOpen={navigationService.openPlaylist}
 									/>
 								);
 							})}

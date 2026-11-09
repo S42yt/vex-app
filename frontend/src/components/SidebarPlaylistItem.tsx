@@ -4,9 +4,10 @@ import { playlistService } from "@/api/PlaylistService";
 import { NowPlayingRing } from "@/components/NowPlayingRing";
 import { PlaylistCover } from "@/components/PlaylistCover";
 import { Button } from "@/components/ui/button";
-import { useLibrary } from "@/hooks/useLibrary";
 import { cn } from "@/lib/utils";
 import type { RemotePlaylist } from "@/api/types";
+import { libraryService } from "@/api/LibraryService";
+import { useStore } from "@/lib/store";
 
 export const SidebarPlaylistItem = memo(function SidebarPlaylistItem({
 	playlist,
@@ -21,7 +22,7 @@ export const SidebarPlaylistItem = memo(function SidebarPlaylistItem({
 	playing: boolean;
 	onOpen: (playlistId: number) => void;
 }) {
-	const { library } = useLibrary();
+	const library = useStore(libraryService);
 	const tracks = useMemo(
 		() => playlistService.tracksOf(playlist),
 		[playlist, library.tracks],

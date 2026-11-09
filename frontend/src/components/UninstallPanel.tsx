@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Group } from "@/components/SettingsControls";
 import { Button } from "@/components/ui/button";
-import { useUninstall } from "@/hooks/useUninstall";
+import { uninstallService } from "@/api/UninstallService";
+import { useStore } from "@/lib/store";
 
 export function UninstallPanel() {
-	const { uninstall, service } = useUninstall();
+	const uninstall = useStore(uninstallService);
 	const [confirming, setConfirming] = useState(false);
 
 	useEffect(() => {
-		void service.check();
-	}, [service]);
+		void uninstallService.check();
+	}, []);
 
 	if (!uninstall.removable) return null;
 
@@ -38,7 +39,7 @@ export function UninstallPanel() {
 				title="Delete VexWave?"
 				description="This removes the player, everything it downloaded to run (its browser engine, yt-dlp and ffmpeg) and its shortcuts, then closes. Your library stays on the server."
 				confirmLabel="Delete VexWave"
-				onConfirm={() => void service.uninstall()}
+				onConfirm={() => void uninstallService.uninstall()}
 			/>
 		</>
 	);

@@ -1,5 +1,6 @@
 import { clamp } from "@/lib/utils";
 import { easeParam, type GraphStage } from "./audioGraph";
+import { Store } from "@/lib/store";
 
 export const EQ_BANDS = [
 	31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
@@ -18,25 +19,18 @@ export interface EqualizerState {
 const clampDb = (db: number): number =>
 	clamp(db, -EQ_GAIN_LIMIT_DB, EQ_GAIN_LIMIT_DB, 0);
 
-export class Equalizer implements GraphStage {
-	private subscribers = new Set<() => void>();
+export class Equalizer extends Store<EqualizerState> implements GraphStage {
 	private enabled = true;
 	private gains: number[] = EQ_BANDS.map(() => 0);
-	private snapshot: EqualizerState;
+	protected snapshot: EqualizerState;
 
 	private context: AudioContext | null = null;
 	private filters: BiquadFilterNode[] = [];
 
 	constructor() {
+		super();
 		this.snapshot = this.buildSnapshot();
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): EqualizerState => this.snapshot;
 
 	setEnabled(enabled: boolean): void {
 		if (enabled === this.enabled) return;
@@ -103,8 +97,7 @@ export class Equalizer implements GraphStage {
 
 	private commit(): void {
 		this.apply();
-		this.snapshot = this.buildSnapshot();
-		this.subscribers.forEach((notify) => notify());
+		this.publish(this.buildSnapshot());
 	}
 
 	private apply(): void {

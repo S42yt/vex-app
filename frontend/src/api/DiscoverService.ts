@@ -2,6 +2,7 @@ import type { MediaSearchResult, SearchSource } from "@/api/types";
 import { storage } from "@/lib/storage";
 import { importService, parseImportUrl } from "./ImportService";
 import { bun } from "./rpc";
+import { Store } from "@/lib/store";
 
 export interface DiscoverState {
 	source: SearchSource;
@@ -11,9 +12,8 @@ export interface DiscoverState {
 	error: string | null;
 }
 
-export class DiscoverService {
-	private subscribers = new Set<() => void>();
-	private snapshot: DiscoverState = {
+export class DiscoverService extends Store<DiscoverState> {
+	protected snapshot: DiscoverState = {
 		source: storage.discover.source.get() ?? "youtube",
 		query: "",
 		results: [],
@@ -21,13 +21,6 @@ export class DiscoverService {
 		error: null,
 	};
 	private generation = 0;
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): DiscoverState => this.snapshot;
 
 	setSource = (source: SearchSource): void => {
 		if (source === this.snapshot.source) return;
@@ -69,11 +62,6 @@ export class DiscoverService {
 		const url = parseImportUrl(result.url);
 		if (url) void importService.start(url);
 	};
-
-	private update(patch: Partial<DiscoverState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
-	}
 }
 
 export const discoverService = new DiscoverService();

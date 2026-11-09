@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Search, Users } from "lucide-react";
 import { artistQueueContext, artistService } from "@/api/ArtistService";
-import { openIdOf } from "@/api/NavigationService";
+import { navigationService, openIdOf } from "@/api/NavigationService";
 import { ArtistAvatar } from "@/components/ArtistAvatar";
 import { ArtistDetail } from "@/components/ArtistDetail";
 import { ArtistDialog } from "@/components/ArtistDialog";
@@ -17,16 +17,15 @@ import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useArtists } from "@/hooks/useArtists";
-import { useNavigation } from "@/hooks/useNavigation";
-import { usePlayer } from "@/hooks/usePlayer";
 import { countLabel, trackCountLabel } from "@/lib/utils";
 import type { RemoteArtist } from "@/api/types";
+import { useStore } from "@/lib/store";
+import { playerController } from "@/player/PlayerController";
 
 export function ArtistsView() {
-	const { artists: state, service } = useArtists();
-	const { view, service: navigation } = useNavigation();
-	const { state: playerState } = usePlayer();
+	const state = useStore(artistService);
+	const view = useStore(navigationService);
+	const playerState = useStore(playerController);
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [editing, setEditing] = useState<RemoteArtist | null>(null);
 	const [pendingDelete, setPendingDelete] = useState<RemoteArtist | null>(null);
@@ -48,7 +47,7 @@ export function ArtistsView() {
 			: null;
 
 	useEffect(() => {
-		if (openId !== null && open === null) navigation.openArtist(null);
+		if (openId !== null && open === null) navigationService.openArtist(null);
 	}, [openId, open, navigation]);
 
 	const needle = query.trim().toLowerCase();
@@ -65,7 +64,7 @@ export function ArtistsView() {
 			{open ? (
 				<ArtistDetail
 					artist={open}
-					onBack={() => navigation.openArtist(null)}
+					onBack={() => navigationService.openArtist(null)}
 					onEdit={() => openEdit(open)}
 				/>
 			) : (
@@ -147,7 +146,7 @@ export function ArtistsView() {
 														? `Pause ${artist.name}`
 														: `Play ${artist.name}`
 												}
-												onOpen={() => navigation.openArtist(artist.id)}
+												onOpen={() => navigationService.openArtist(artist.id)}
 												onPlay={
 													count > 0
 														? () => artistService.playOrToggle(artist)
@@ -184,7 +183,7 @@ export function ArtistsView() {
 				title="Delete artist?"
 				description={`Removes “${pendingDelete?.name}” from the server. Its tracks are kept, but lose the credit.`}
 				onConfirm={() => {
-					if (pendingDelete) void service.remove(pendingDelete.id);
+					if (pendingDelete) void artistService.remove(pendingDelete.id);
 				}}
 			/>
 		</div>

@@ -8,9 +8,9 @@ import {
 	ContextMenuSubContent,
 	ContextMenuSubTrigger,
 } from "@/components/ui/context-menu";
-import { useDownloads } from "@/hooks/useDownloads";
 import type { RemoteArtist, RemotePlaylist } from "@/api/types";
 import type { Track } from "@/player/types";
+import { useStore } from "@/lib/store";
 
 export function TrackEditItem({ onSelect }: { onSelect: () => void }) {
 	return (
@@ -104,7 +104,7 @@ export function TrackPlaylistsSubmenu({
 }
 
 export function TrackDownloadItem({ track }: { track: Track }) {
-	const { activeIds } = useDownloads();
+	const { activeIds } = useStore(downloadService);
 	const running = activeIds.includes(track.id);
 	return (
 		<ContextMenuItem

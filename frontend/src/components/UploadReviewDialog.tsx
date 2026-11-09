@@ -14,12 +14,12 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useUploads } from "@/hooks/useUploads";
 import { tooLargeMessage } from "@/lib/utils";
 import { MAX_IMAGE_BYTES, MAX_NAME_LENGTH } from "@/lib/limits";
+import { useStore } from "@/lib/store";
 
 export function UploadReviewDialog() {
-	const { staged, reviewedCount } = useUploads();
+	const { staged, reviewedCount } = useStore(uploadService);
 	const head = staged[0];
 	const hasBatch = head !== undefined;
 

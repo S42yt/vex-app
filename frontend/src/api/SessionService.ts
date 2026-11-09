@@ -1,6 +1,7 @@
 import { storage } from "@/lib/storage";
 import type { RpcFailure } from "@/api/types";
 import { bun, onBunMessage } from "./rpc";
+import { Store } from "@/lib/store";
 
 export type SessionStatus = "loggedOut" | "loggingIn" | "loggedIn";
 
@@ -16,11 +17,11 @@ export interface SessionState {
 	retryAfter: number | null;
 }
 
-export class SessionService {
-	private subscribers = new Set<() => void>();
-	private snapshot: SessionState;
+export class SessionService extends Store<SessionState> {
+	protected snapshot: SessionState;
 
 	constructor() {
+		super();
 		const baseUrl = storage.session.url.get() ?? "";
 		const token = storage.session.token.get() ?? "";
 		this.snapshot = {
@@ -53,13 +54,6 @@ export class SessionService {
 		this.clearStoredToken();
 		this.update({ status: "loggedOut", restoring: false });
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): SessionState => this.snapshot;
 
 	async login(
 		baseUrl: string,
@@ -126,7 +120,7 @@ export class SessionService {
 			this.update({ savingProxy: false, proxyUrl });
 		} else if (result.status === 401) {
 			this.update({ savingProxy: false });
-			this.markExpired("Session expired — please log in again.");
+			this.markExpired();
 		} else {
 			this.update({
 				savingProxy: false,
@@ -145,7 +139,17 @@ export class SessionService {
 		this.update({ status: "loggedOut", error: null });
 	}
 
-	markExpired(message: string): void {
+	onStatusChange(listener: (status: SessionStatus) => void): void {
+		let previous = this.snapshot.status;
+		this.subscribe(() => {
+			const { status } = this.snapshot;
+			if (status === previous) return;
+			previous = status;
+			listener(status);
+		});
+	}
+
+	markExpired(message = "Session expired — please log in again."): void {
 		this.clearStoredToken();
 		this.update({ status: "loggedOut", error: message });
 	}
@@ -157,11 +161,6 @@ export class SessionService {
 	private storeProxy(proxyUrl: string): void {
 		if (proxyUrl) storage.session.proxy.set(proxyUrl);
 		else storage.session.proxy.remove();
-	}
-
-	private update(patch: Partial<SessionState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

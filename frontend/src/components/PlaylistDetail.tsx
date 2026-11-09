@@ -29,13 +29,12 @@ import { PlaylistCover } from "@/components/PlaylistCover";
 import { PlaylistTrackRow } from "@/components/PlaylistTrackRow";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useArtists } from "@/hooks/useArtists";
-import { useLibrary } from "@/hooks/useLibrary";
-import { usePlayer } from "@/hooks/usePlayer";
-import { usePlaylists } from "@/hooks/usePlaylists";
 import { useTrackActions } from "@/hooks/useTrackActions";
 import { formatTime, trackCountLabel } from "@/lib/utils";
 import type { RemotePlaylist } from "@/api/types";
+import { artistService } from "@/api/ArtistService";
+import { useStore } from "@/lib/store";
+import { playerController } from "@/player/PlayerController";
 
 const POINTER_OPTIONS = { activationConstraint: { distance: 4 } };
 const KEYBOARD_OPTIONS = { coordinateGetter: sortableKeyboardCoordinates };
@@ -49,10 +48,10 @@ export function PlaylistDetail({
 	onBack: () => void;
 	onEdit: () => void;
 }) {
-	const { state } = usePlayer();
-	const { library } = useLibrary();
-	const { playlists } = usePlaylists();
-	const { artists } = useArtists();
+	const state = useStore(playerController);
+	const library = useStore(libraryService);
+	const playlists = useStore(playlistService);
+	const artists = useStore(artistService);
 	const [addOpen, setAddOpen] = useState(false);
 	const actions = useTrackActions();
 

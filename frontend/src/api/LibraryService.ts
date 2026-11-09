@@ -1,7 +1,7 @@
-import { playerController } from "@/hooks/usePlayer";
+import { playerController } from "@/player/PlayerController";
 import type { Track } from "@/player/types";
 import type { EditTrackParams, RemoteTrack } from "@/api/types";
-import { libraryData } from "./LibraryData";
+import { LibraryView, libraryData } from "./LibraryData";
 import type { LibraryDataState } from "./LibraryData";
 import { mutate } from "./mutate";
 import type { MutationResult } from "./mutate";
@@ -18,34 +18,18 @@ export interface LibraryState {
 
 export type EditTrackChanges = Omit<EditTrackParams, "id">;
 
-export class LibraryService {
-	private subscribers = new Set<() => void>();
-	private snapshot: LibraryState = { tracks: [], loading: false, error: null };
+export class LibraryService extends LibraryView<LibraryState> {
+	protected snapshot: LibraryState = { tracks: [], loading: false, error: null };
 	private remoteById = new Map<string, RemoteTrack>();
 	private trackById = new Map<string, Track>();
 	private tracksByArtistId = new Map<number, Track[]>();
-	private mutationError: string | null = null;
-	private builtFrom: Pick<LibraryDataState, "tracks" | "artists"> =
-		libraryData.getSnapshot();
 
 	constructor() {
-		libraryData.subscribe(() => this.apply());
-
-		let previousStatus = sessionService.getSnapshot().status;
-		sessionService.subscribe(() => {
-			const status = sessionService.getSnapshot().status;
-			if (status === previousStatus) return;
-			previousStatus = status;
+		super();
+		sessionService.onStatusChange((status) => {
 			if (status === "loggedOut") playerController.clearQueue();
 		});
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): LibraryState => this.snapshot;
 
 	getTrack(trackId: string): Track | undefined {
 		return this.trackById.get(trackId);
@@ -76,18 +60,11 @@ export class LibraryService {
 		return this.snapshot.tracks.find((track) => !known.has(track.id)) ?? null;
 	}
 
-	private apply(): void {
-		const data = libraryData.getSnapshot();
-		if (data.loading) this.mutationError = null;
-		const error = this.mutationError ?? data.error;
-		if (
-			data.tracks === this.builtFrom.tracks &&
-			data.artists === this.builtFrom.artists
-		) {
-			this.update({ loading: data.loading, error });
-			return;
-		}
-		this.builtFrom = data;
+	protected sources(data: LibraryDataState): readonly unknown[] {
+		return [data.tracks, data.artists];
+	}
+
+	protected rebuild(data: LibraryDataState): Partial<LibraryState> {
 		const remotes = [...data.tracks].reverse();
 		this.remoteById = new Map(remotes.map((remote) => [remote.id, remote]));
 		const namesById = new Map(data.artists.map(({ id, name }) => [id, name]));
@@ -101,11 +78,11 @@ export class LibraryService {
 				else this.tracksByArtistId.set(artistId, [track]);
 			}
 		});
-		this.update({ tracks, loading: data.loading, error });
-		this.syncQueue(tracks);
+		return { tracks };
 	}
 
-	private syncQueue(tracks: Track[]): void {
+	protected syncQueue(): void {
+		const { tracks } = this.snapshot;
 		const context = playerController.queueContextId;
 		if (context === null || context === LIBRARY_QUEUE_CONTEXT) {
 			playerController.syncCollection(LIBRARY_QUEUE_CONTEXT, tracks);
@@ -162,16 +139,6 @@ export class LibraryService {
 		);
 		if (result.ok) void libraryData.refresh();
 		return result;
-	}
-
-	private fail(error: string): void {
-		this.mutationError = error;
-		this.update({ error });
-	}
-
-	private update(patch: Partial<LibraryState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

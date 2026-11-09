@@ -3,7 +3,8 @@ import * as SliderPrimitive from "@radix-ui/react-slider";
 import { Group, Toggle } from "@/components/SettingsControls";
 import { Button } from "@/components/ui/button";
 import { SliderThumb } from "@/components/ui/slider";
-import { useEqualizer } from "@/hooks/useEqualizer";
+import { useStore } from "@/lib/store";
+import { playerController } from "@/player/PlayerController";
 import { cn } from "@/lib/utils";
 import {
 	EQ_BANDS,
@@ -12,7 +13,8 @@ import {
 } from "@/player/Equalizer";
 
 export function EqualizerPanel() {
-	const { state, equalizer } = useEqualizer();
+	const { equalizer } = playerController;
+	const state = useStore(equalizer);
 	const off = !state.enabled;
 	const flat = state.gains.every((gain) => gain === 0);
 

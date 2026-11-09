@@ -1,13 +1,14 @@
 import { memo, useEffect } from "react";
 import { UpdateBanner } from "@/components/UpdateBanner";
-import { useAppUpdate } from "@/hooks/useAppUpdate";
+import { appUpdateService } from "@/api/AppUpdateService";
+import { useStore } from "@/lib/store";
 
 export const AppUpdateBanner = memo(function AppUpdateBanner() {
-	const { update, service } = useAppUpdate();
+	const update = useStore(appUpdateService);
 
 	useEffect(() => {
-		void service.checkForUpdate();
-	}, [service]);
+		void appUpdateService.checkForUpdate();
+	}, []);
 
 	const version = update.latestVersion;
 	if (!version) return null;
@@ -17,7 +18,7 @@ export const AppUpdateBanner = memo(function AppUpdateBanner() {
 			<UpdateBanner
 				tone="error"
 				message={`VexWave update failed: ${update.error}`}
-				action={{ label: "Retry", onClick: () => void service.retry() }}
+				action={{ label: "Retry", onClick: () => void appUpdateService.retry() }}
 			/>
 		);
 	}
@@ -40,7 +41,7 @@ export const AppUpdateBanner = memo(function AppUpdateBanner() {
 					message={`VexWave ${version} is ready to install.`}
 					action={{
 						label: "Restart to install",
-						onClick: () => void service.install(),
+						onClick: () => void appUpdateService.install(),
 					}}
 				/>
 			);
@@ -49,8 +50,8 @@ export const AppUpdateBanner = memo(function AppUpdateBanner() {
 			return (
 				<UpdateBanner
 					message={`VexWave ${version} is available.`}
-					action={{ label: "Update", onClick: () => void service.download() }}
-					onDismiss={() => service.dismiss()}
+					action={{ label: "Update", onClick: () => void appUpdateService.download() }}
+					onDismiss={() => appUpdateService.dismiss()}
 				/>
 			);
 	}

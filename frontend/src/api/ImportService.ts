@@ -2,6 +2,7 @@ import type { UrlImportProgressMessage } from "@/api/types";
 import { formatMb } from "@/lib/utils";
 import { bun, onBunMessage } from "./rpc";
 import { uploadService } from "./UploadService";
+import { Store } from "@/lib/store";
 
 const SUPPORTED_HOSTS = [
 	"youtube.com",
@@ -70,17 +71,9 @@ export function importStatusLabel(job: ImportJob): string {
 	}
 }
 
-export class ImportService {
-	private subscribers = new Set<() => void>();
+export class ImportService extends Store<ImportsState> {
 	private jobs: ImportJob[] = [];
-	private snapshot: ImportsState = { imports: [] };
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): ImportsState => this.snapshot;
+	protected snapshot: ImportsState = { imports: [] };
 
 	jobFor(url: string): ImportJob | null {
 		return this.jobs.find((job) => job.url === url) ?? null;
@@ -156,8 +149,7 @@ export class ImportService {
 	}
 
 	private emit(): void {
-		this.snapshot = { imports: this.jobs };
-		this.subscribers.forEach((notify) => notify());
+		this.publish({ imports: this.jobs });
 	}
 }
 

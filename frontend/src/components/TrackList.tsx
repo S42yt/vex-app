@@ -10,14 +10,14 @@ import { SECTIONS } from "@/components/Sections";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { useArtists } from "@/hooks/useArtists";
-import { useImports } from "@/hooks/useImports";
-import { useLibrary } from "@/hooks/useLibrary";
-import { usePlayer } from "@/hooks/usePlayer";
-import { usePlaylists } from "@/hooks/usePlaylists";
 import { useTrackActions } from "@/hooks/useTrackActions";
-import { useUploads } from "@/hooks/useUploads";
 import { formatTime, trackCountLabel } from "@/lib/utils";
+import { artistService } from "@/api/ArtistService";
+import { useStore } from "@/lib/store";
+import { playlistService } from "@/api/PlaylistService";
+import { playerController } from "@/player/PlayerController";
+import { importService } from "@/api/ImportService";
+import { uploadService } from "@/api/UploadService";
 
 function matches(query: string, ...fields: (string | undefined)[]): boolean {
 	if (!query) return true;
@@ -26,12 +26,12 @@ function matches(query: string, ...fields: (string | undefined)[]): boolean {
 }
 
 export function TrackList() {
-	const { state } = usePlayer();
-	const { library } = useLibrary();
-	const { playlists } = usePlaylists();
-	const { artists } = useArtists();
-	const { uploads } = useUploads();
-	const { imports } = useImports();
+	const state = useStore(playerController);
+	const library = useStore(libraryService);
+	const playlists = useStore(playlistService);
+	const artists = useStore(artistService);
+	const { uploads } = useStore(uploadService);
+	const { imports } = useStore(importService);
 	const actions = useTrackActions();
 	const [query, setQuery] = useState("");
 	const tracks = library.tracks;

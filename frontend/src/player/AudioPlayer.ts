@@ -2,7 +2,6 @@ import { clamp } from "@/lib/utils";
 import { Effects } from "./Effects";
 import { Equalizer } from "./Equalizer";
 import { TypedEventEmitter } from "./TypedEventEmitter";
-import type { Track } from "./types";
 
 // How loudness follows amplitude: about its 0.6 power (Stevens).
 const LOUDNESS_EXPONENT = 0.6;
@@ -11,7 +10,7 @@ const amplitudeFor = (position: number): number =>
 	position ** (1 / LOUDNESS_EXPONENT);
 
 interface AudioPlayerEvents extends Record<string, unknown> {
-	trackchange: Track | null;
+	sourcechange: void;
 	play: void;
 	pause: void;
 	timeupdate: number;
@@ -23,7 +22,7 @@ interface AudioPlayerEvents extends Record<string, unknown> {
 
 export class AudioPlayer extends TypedEventEmitter<AudioPlayerEvents> {
 	private audio: HTMLAudioElement;
-	private track: Track | null = null;
+	private hasSource = false;
 	readonly equalizer = new Equalizer();
 	readonly effects: Effects;
 	private position = 1;
@@ -65,10 +64,6 @@ export class AudioPlayer extends TypedEventEmitter<AudioPlayerEvents> {
 		});
 	}
 
-	get currentTrack(): Track | null {
-		return this.track;
-	}
-
 	get analyser(): AnalyserNode | null {
 		return this.analyserNode;
 	}
@@ -93,19 +88,19 @@ export class AudioPlayer extends TypedEventEmitter<AudioPlayerEvents> {
 		return this.audio.muted;
 	}
 
-	load(track: Track | null): void {
-		this.track = track;
-		if (track) {
-			this.audio.src = track.src;
+	load(src: string | null): void {
+		this.hasSource = src !== null;
+		if (src !== null) {
+			this.audio.src = src;
 		} else {
 			this.audio.removeAttribute("src");
 			this.audio.load();
 		}
-		this.emit("trackchange", track);
+		this.emit("sourcechange", undefined);
 	}
 
 	async play(): Promise<void> {
-		if (!this.track) return;
+		if (!this.hasSource) return;
 		void this.ensureAnalyser();
 		try {
 			await this.audio.play();
@@ -180,7 +175,7 @@ export class AudioPlayer extends TypedEventEmitter<AudioPlayerEvents> {
 	}
 
 	seek(seconds: number): void {
-		if (!this.track) return;
+		if (!this.hasSource) return;
 		const max = this.duration || seconds;
 		this.audio.currentTime = Math.min(Math.max(seconds, 0), max);
 	}

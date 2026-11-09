@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { PlayerController } from "@/player/PlayerController";
+import { playerController } from "@/player/PlayerController";
 
 const BASS_HZ = 160;
 const PUNCH_LOW_HZ = 1500;
@@ -22,7 +22,7 @@ function bandLevel(data: Float32Array, start: number, end: number): number {
 	return sum / Math.max(1, end - start);
 }
 
-export function useAudioGlow(controller: PlayerController, isPlaying: boolean) {
+export function useAudioGlow(isPlaying: boolean) {
 	const nodeRef = useRef<HTMLDivElement | null>(null);
 	const frameRef = useRef<number | null>(null);
 	const playingRef = useRef(isPlaying);
@@ -44,7 +44,7 @@ export function useAudioGlow(controller: PlayerController, isPlaying: boolean) {
 
 		const tick = () => {
 			const node = nodeRef.current;
-			const analyser = controller.analyser;
+			const analyser = playerController.analyser;
 			if (analyser !== analyserRef.current) {
 				analyserRef.current = analyser;
 				dataRef.current = new Float32Array(analyser?.frequencyBinCount ?? 0);
@@ -112,7 +112,7 @@ export function useAudioGlow(controller: PlayerController, isPlaying: boolean) {
 		};
 
 		frameRef.current = requestAnimationFrame(tick);
-	}, [isPlaying, controller]);
+	}, [isPlaying]);
 
 	useEffect(
 		() => () => {

@@ -12,7 +12,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/Logo";
 import { useSecondsUntil } from "@/hooks/useSecondsUntil";
-import { useSession } from "@/hooks/useSession";
 import {
 	INVALID_PROXY_MESSAGE,
 	parseProxyUrl,
@@ -23,6 +22,8 @@ import {
 	MAX_PASSWORD_LENGTH,
 	MAX_USERNAME_LENGTH,
 } from "@/lib/limits";
+import { sessionService } from "@/api/SessionService";
+import { useStore } from "@/lib/store";
 
 function Field({
 	id,
@@ -44,7 +45,7 @@ function Field({
 }
 
 export function LoginScreen() {
-	const { session, service } = useSession();
+	const session = useStore(sessionService);
 	const [address, setAddress] = useState(session.lastServerUrl);
 	const [proxyAddress, setProxyAddress] = useState(session.proxyUrl);
 	const [username, setUsername] = useState("");
@@ -74,7 +75,7 @@ export function LoginScreen() {
 			return;
 		}
 		setValidationError(null);
-		void service.login(baseUrl, username, password, proxyUrl);
+		void sessionService.login(baseUrl, username, password, proxyUrl);
 	};
 
 	return (

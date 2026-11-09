@@ -1,8 +1,9 @@
-import { playerController } from "@/hooks/usePlayer";
+import { playerController } from "@/player/PlayerController";
 import { storage } from "@/lib/storage";
 import type { PlayerState } from "@/player/types";
 import type { PresenceStatus, PresenceTrack } from "@/api/types";
 import { bun, notifyBun, onBunMessage } from "./rpc";
+import { Store } from "@/lib/store";
 
 const DRIFT_TOLERANCE_SEC = 2;
 
@@ -11,21 +12,13 @@ export interface PresenceState {
 	status: PresenceStatus;
 }
 
-export class PresenceService {
-	private subscribers = new Set<() => void>();
-	private snapshot: PresenceState = {
+export class PresenceService extends Store<PresenceState> {
+	protected snapshot: PresenceState = {
 		enabled: storage.discord.presenceEnabled.get() ?? true,
 		status: { connection: "offline" },
 	};
 	private sent: PresenceTrack | null = null;
 	private sentAt = 0;
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): PresenceState => this.snapshot;
 
 	start(): void {
 		void this.announce(this.snapshot.enabled);
@@ -84,11 +77,6 @@ export class PresenceService {
 		const expectedSec =
 			this.sent.positionSec + (Date.now() - this.sentAt) / 1000;
 		return Math.abs(next.positionSec - expectedSec) > DRIFT_TOLERANCE_SEC;
-	}
-
-	private update(patch: Partial<PresenceState>): void {
-		this.snapshot = { ...this.snapshot, ...patch };
-		this.subscribers.forEach((notify) => notify());
 	}
 }
 

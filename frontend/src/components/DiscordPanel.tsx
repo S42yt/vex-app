@@ -1,10 +1,11 @@
 import { Group, SettingRow, Toggle } from "@/components/SettingsControls";
-import { usePresence } from "@/hooks/usePresence";
 import { cn } from "@/lib/utils";
 import type { PresenceStatus } from "@/api/types";
+import { presenceService } from "@/api/PresenceService";
+import { useStore } from "@/lib/store";
 
 export function DiscordPanel() {
-	const { presence, service } = usePresence();
+	const presence = useStore(presenceService);
 	const refusal =
 		presence.enabled && presence.status.connection === "refused"
 			? presence.status.refusal
@@ -19,7 +20,7 @@ export function DiscordPanel() {
 					{presence.enabled && <ConnectionMark status={presence.status} />}
 					<Toggle
 						checked={presence.enabled}
-						onChange={service.setEnabled}
+						onChange={presenceService.setEnabled}
 						{...labelling}
 					/>
 				</div>

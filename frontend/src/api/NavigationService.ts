@@ -1,4 +1,5 @@
 import { sessionService } from "./SessionService";
+import { Store } from "@/lib/store";
 
 const DETAIL_VIEWS = ["playlists", "artists"] as const;
 
@@ -42,27 +43,16 @@ export function openIdOf(view: MainView): number | null {
 	return "openId" in view ? view.openId : null;
 }
 
-export class NavigationService {
-	private subscribers = new Set<() => void>();
+export class NavigationService extends Store<MainView> {
 	private resume = new Map<SectionName, MainView>();
-	private snapshot: MainView = viewOf(HOME_SECTION);
+	protected snapshot: MainView = viewOf(HOME_SECTION);
 
 	constructor() {
-		let previousStatus = sessionService.getSnapshot().status;
-		sessionService.subscribe(() => {
-			const status = sessionService.getSnapshot().status;
-			if (status === previousStatus) return;
-			previousStatus = status;
+		super();
+		sessionService.onStatusChange((status) => {
 			if (status === "loggedOut") this.reset();
 		});
 	}
-
-	subscribe = (onChange: () => void): (() => void) => {
-		this.subscribers.add(onChange);
-		return () => this.subscribers.delete(onChange);
-	};
-
-	getSnapshot = (): MainView => this.snapshot;
 
 	show = (name: MainViewName): void => {
 		this.set(viewOf(name));
@@ -86,8 +76,7 @@ export class NavigationService {
 			return;
 		}
 		this.resume.set(sectionOf(view), view);
-		this.snapshot = view;
-		this.subscribers.forEach((notify) => notify());
+		this.publish(view);
 	}
 
 	private reset(): void {
