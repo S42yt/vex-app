@@ -186,11 +186,11 @@ export interface ImportFromUrlParams {
 	url: string;
 }
 
-export interface DiscardImportParams {
-	importId: string;
-}
-
-export type UrlImportStep = "starting" | "downloading" | "converting";
+export type UrlImportStep =
+	| "starting"
+	| "downloading"
+	| "converting"
+	| "staging";
 
 export interface ImportedArtist {
 	name: string;

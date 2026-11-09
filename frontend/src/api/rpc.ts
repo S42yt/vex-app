@@ -2,7 +2,9 @@ import { Events } from "@wailsio/runtime";
 import * as EventNames from "../../bindings/events";
 import * as Binaries from "../../bindings/github.com/VexWave/vex-app/internal/binaries/binaryservice";
 import * as Download from "../../bindings/github.com/VexWave/vex-app/internal/download/downloadservice";
+import * as Importer from "../../bindings/github.com/VexWave/vex-app/internal/importer/importservice";
 import * as Library from "../../bindings/github.com/VexWave/vex-app/internal/library/libraryservice";
+import * as Search from "../../bindings/github.com/VexWave/vex-app/internal/search/searchservice";
 import * as Session from "../../bindings/github.com/VexWave/vex-app/internal/session/sessionservice";
 import * as Upload from "../../bindings/github.com/VexWave/vex-app/internal/upload/uploadservice";
 import type {
@@ -17,7 +19,6 @@ import type {
 	DeleteArtistParams,
 	DeletePlaylistParams,
 	DeleteTrackParams,
-	DiscardImportParams,
 	DiscardStagedParams,
 	DownloadTrackParams,
 	DownloadTrackResult,
@@ -29,6 +30,7 @@ import type {
 	InstallAppUpdateResult,
 	LoginParams,
 	LoginResult,
+	MediaSearchResult,
 	PickTracksResult,
 	PresenceMessage,
 	PresenceStatus,
@@ -72,7 +74,6 @@ type Requests = {
 	downloadAppUpdate(): Promise<RpcResult>;
 	installAppUpdate(): Promise<InstallAppUpdateResult>;
 	importFromUrl(params: ImportFromUrlParams): Promise<RpcResult>;
-	discardImport(params: DiscardImportParams): Promise<RpcResult>;
 	searchMedia(params: SearchMediaParams): Promise<SearchMediaResult>;
 	setPresenceEnabled(params: SetPresenceEnabledParams): Promise<PresenceStatus>;
 	canUninstall(): Promise<UninstallTarget>;
@@ -142,6 +143,11 @@ const ported: Partial<Requests> = {
 		settle(Binaries.GetBinaryStatus(), (st) => st as BinaryStatus),
 	installMissingBinaries: (p) => settle(Binaries.InstallMissingBinaries(p)),
 	updateYtDlp: () => settle(Binaries.UpdateYtDlp()),
+	importFromUrl: (p) => settle(Importer.Start(p)),
+	searchMedia: (p) =>
+		settle(Search.Search(p), (results) => ({
+			results: results as MediaSearchResult[],
+		})),
 	checkYtDlpUpdate: () =>
 		Binaries.CheckYtDlpUpdate().then((r) => ({ ok: true as const, ...r })),
 };
@@ -161,6 +167,11 @@ const pushed: {
 		{ event: EventNames.BinariesInstalled, wrap: (d) => ({ type: "binaryInstalled", ...d }) },
 		{ event: EventNames.BinariesFinished, wrap: () => ({ type: "finished" }) },
 		{ event: EventNames.BinariesFailed, wrap: (d) => ({ type: "failed", ...d }) },
+	],
+	urlImportProgress: [
+		{ event: EventNames.ImportProgress, wrap: (d) => ({ type: "progress", ...d }) },
+		{ event: EventNames.ImportStaged, wrap: (d) => ({ type: "staged", ...d }) },
+		{ event: EventNames.ImportFailed, wrap: (d) => ({ type: "failed", ...d }) },
 	],
 };
 

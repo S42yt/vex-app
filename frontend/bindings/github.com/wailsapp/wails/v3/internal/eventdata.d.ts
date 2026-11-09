@@ -8,6 +8,9 @@ import type { Events } from "@wailsio/runtime";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import type * as events$0 from "../../../../VexWave/vex-app/internal/events/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import type * as importer$0 from "../../../../VexWave/vex-app/internal/importer/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
@@ -16,6 +19,9 @@ declare module "@wailsio/runtime" {
             "binaries:finished": events$0.BinariesDone;
             "binaries:installed": events$0.BinaryInstalled;
             "binaries:progress": events$0.BinaryProgress;
+            "import:failed": importer$0.Failure;
+            "import:progress": importer$0.Step;
+            "import:staged": importer$0.Ready;
             "session:expired": events$0.SessionExpiredData;
         }
     }

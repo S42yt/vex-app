@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"log"
 	"os"
@@ -10,8 +11,10 @@ import (
 	"github.com/VexWave/vex-app/internal/busy"
 	"github.com/VexWave/vex-app/internal/datadirs"
 	"github.com/VexWave/vex-app/internal/download"
+	"github.com/VexWave/vex-app/internal/importer"
 	"github.com/VexWave/vex-app/internal/library"
 	"github.com/VexWave/vex-app/internal/media"
+	"github.com/VexWave/vex-app/internal/search"
 	"github.com/VexWave/vex-app/internal/session"
 	"github.com/VexWave/vex-app/internal/upload"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -26,16 +29,27 @@ func main() {
 	layout := datadirs.Default()
 	store := &session.Store{}
 	busyRegistry := &busy.Registry{}
-	binaryService := &binaries.BinaryService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: func() string {
+	proxy := func() string {
 		if cur, ok := store.Current(); ok {
 			return cur.Proxy
 		}
 		return ""
-	}}
+	}
+	binaryService := &binaries.BinaryService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy}
 	mediaSession := &session.MediaSession{Store: store}
 	mediaServer := media.New(mediaSession, trackCacheBytes)
 	uploads := &upload.UploadService{Bin: layout.Bin(), Busy: busyRegistry, Store: store, CoverURL: mediaServer.StagedCoverURL}
 	mediaServer.Staged = uploads
+	imports := &importer.ImportService{
+		Dir: layout.Imports(buildinfo.Channel), Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy,
+		Stage: func(ctx context.Context, path string) (upload.Staged, error) {
+			staged, err := uploads.Stage(ctx, []string{path}, true)
+			if err != nil {
+				return upload.Staged{}, err
+			}
+			return staged[0], nil
+		},
+	}
 	if err := mediaServer.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -57,6 +71,8 @@ func main() {
 			application.NewService(binaryService),
 			application.NewService(uploads),
 			application.NewService(&download.DownloadService{Busy: busyRegistry, Tracks: mediaServer}),
+			application.NewService(imports),
+			application.NewService(&search.SearchService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -77,6 +93,7 @@ func main() {
 	})
 	mediaSession.Events = app.Event
 	binaryService.Events = app.Event
+	imports.Events = app.Event
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "VexWave",

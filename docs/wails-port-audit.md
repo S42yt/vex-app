@@ -405,7 +405,7 @@ Each bound call is a goroutine, so every piece of state Bun's event loop protect
 | Session + proxy check (`ApiClient.ts:95-151`) | Immutable `Session` value behind `atomic.Pointer`. `SetProxy` probes, then `CompareAndSwap(old, next)`, else "session changed". `Expire(seen)` is a CAS too | Readers on every request; writers rare and whole-value. No lock to hold across the network probe | `session_test.go`: 500 rounds of concurrent login/logout/SetProxy/expire/read; `TestExpireIgnoresNewerSession` |
 | Busy flags + quit guard (`index.ts:77-123`): `importer.isActive`, `mediaSearch.isActive`, `binaryManager.isBusy`, `appUpdater.isBusy`, `trackTransfers` | `busy.Registry`: one mutex, `Acquire(kind) (release, error)` checks the conflict table and takes the token atomically. `QuitBlocker()` reads the same counters | Check-and-act must be one step: 97/2 000 overlaps with the 1:1 port, 0 with `Acquire` | `busy_test.go` |
 | Importer queue (`UrlImporter.ts:47-50,94-115`) | One worker goroutine reading a buffered channel; `Start` takes a `busy.Import` token per job, released when the job ends | Serial by construction, so no `running` flag and no lock; the token is "running or queued" | `importer_test.go`: order kept, install refused while queued, import refused while installing |
-| Search supersede (`MediaSearch.ts:48-49,67-69,107`) | Mutex-held `context.CancelCauseFunc`; a new search cancels the old one with `ErrSuperseded`. The call's own ctx is the parent, so `promise.cancel()` also stops it | The cause tells superseded apart from caller-cancelled; no generation counter | `search_test.go`: newest wins, caller cancel ≠ superseded, 200-search storm leaves nothing behind |
+| Search supersede (`MediaSearch.ts:48-49,67-69,107`) | Mutex-held `context.CancelCauseFunc`; a new search cancels the old one with `ErrSuperseded`. The call's own ctx is the parent, so `promise.cancel()` also stops it | The cause tells superseded apart from caller-cancelled; no generation counter | `search_test.go` (against a fake `yt-dlp.exe`, so 30 searches rather than 200): newest wins, caller cancel ≠ superseded, a storm leaves nothing behind |
 | Binary install task (`BinaryManager.ts:52,141-145`) | `busy.Install` token; a second `Install` while one runs returns ok (joins), as today | Nothing else in the process to share; progress goes out as events | covered by `busy_test.go` |
 | `VexWaveData\bin\` across channels (today both channels already share `%LOCALAPPDATA%\VexWave\bin`, `BinaryManager.ts:30-35`, with no cross-process guard) | `LockFileEx` on `bin\.lock`: shared around every managed-binary spawn, exclusive around installs; taken in addition to the `busy` token | `busy.Registry` only sees its own process, and two channels (a dev build and stable, later canary) can run at once. Windows refuses to replace or delete a running exe | `port-sandbox/gotests/datadirs/binlock_test.go` (§3.13) |
 | App update state (`AppUpdater.ts:22-24`) | The Wails updater owns its state (`sync.RWMutex`, `wails:v3/pkg/updater/updater.go:197-201`); `UpdateService` holds `busy.AppDownload` around `DownloadAndInstall` | No state of our own left | `updatertest` |
@@ -453,8 +453,9 @@ Two more findings:
 - **Killing:** `yt-dlp.exe` is a PyInstaller one-file build. It runs a second `yt-dlp.exe` as its worker (seen with `Win32_Process`). Killing the parent through `exec.CommandContext` cancellation ended the worker within 1.5 s (`winproc/ytdlp_test.go`, `TestYtDlpKillLeavesChildren`). So no job-object wrapper is needed. Whether an ffmpeg started by the worker during an import also ends is still to check (§7).
 - **Bin lock:** every yt-dlp run holds the shared bin lock for its whole lifetime, so the ffmpeg it starts is covered too (§3.13).
 - **Proxy env for children:** same logic as `ytDlp.ts:19-27` (yt-dlp reads `no_proxy` itself).
-- **Imports:** the worker goroutine from §3.4, writing to `VexWaveData\<channel>\imports\`. The finished file goes to `Uploads.Stage` (§3.2), and `discardImport` survives for failed or dismissed jobs. The avatar lookup (`UrlImporter.ts:189-225`) runs as a goroutine joined before staging.
-- **Search:** §3.4. `DiscoverService` may also `cancel()` the previous promise.
+- **Imports:** the worker goroutine from §3.4, writing to `VexWaveData\<channel>\imports\`. The finished file goes to `Uploads.Stage` (§3.2) as an owned file, deleted once it's uploaded or discarded. A failed job deletes its own `<id>.*` files. So `discardImport` has no caller left and is gone. A job the user dismissed before its `import:staged` arrives gets its staged entry discarded by the webview. The avatar lookup (`UrlImporter.ts:189-225`) runs as a goroutine joined before staging.
+- **Search:** §3.4. `DiscoverService` doesn't `cancel()` the previous promise; it ignores stale answers by generation, as today.
+- **Tests** run the real spawn path against a fake `yt-dlp.exe` that `internal/ytdlp/ytdlptest` builds into the test's temp dir.
 
 ### 3.7 Discord Rich Presence — **med**
 
@@ -622,7 +623,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 | `PresenceService` | `setPresenceEnabled` :55; `notifyBun.presenceChanged` :70 → `Presence.SetNowPlaying`, not awaited |
 | `UninstallService` | `canUninstall` :29, `uninstallApp` :42 |
 | `AppUpdateService` | `checkAppUpdate` :43, `downloadAppUpdate` :58, `installAppUpdate` :77 → *changes* |
-| `ImportService` | `importFromUrl` :108, `discardImport` :160 |
+| `ImportService` | `importFromUrl` :108 (`discardImport` :160 goes with `stage()`) |
 | `UploadService` | `uploadTrack` :216 → *changes* |
 
 ### Pushed-message listeners → events
@@ -631,7 +632,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 |---|---|
 | `SessionService.ts:176` `sessionExpired` | `session:expired` |
 | `BinaryService.ts:225` `binaryProgress` | four `binaries:*` events; the facade can fold them back into today's message |
-| `ImportService.ts:187` `urlImportProgress` | `import:progress` / `import:staged` / `import:failed`; the `finished` branch's `stage()` (:143-167) goes away |
+| `ImportService.ts:187` `urlImportProgress` | `import:progress` / `import:staged` / `import:failed`; the `finished` variant becomes `staged`, carrying the staged file, and its `stage()` (:143-167) goes away |
 | `AppUpdateService.ts:125` `appUpdateProgress` | `updater:*` events |
 | `PresenceService.ts:110` `presenceStatus` | `presence:status` |
 
@@ -733,13 +734,13 @@ internal/
   upload/                      // UploadService (bound): Pick, Stage, Confirm, Discard; probe (ffprobe/ffmpeg); streamed body; worker
   download/                    // DownloadService (bound): SaveTrack
   binaries/                    // BinaryService (bound) + Manager
-  ytdlp/                       // Run(ctx, args) → lines + exit; BaseArgs; Env; DescribeFailure
+  ytdlp/                       // Command (base args, proxy env), Lines, Tail + Failure (last ERROR: line); ytdlptest builds a fake yt-dlp.exe
   importer/                    // ImportService (bound): Start, Discard; worker goroutine; avatar
   search/                      // SearchService (bound): Search; rank.go (pure, cases.Fold) + rank_test.go + testdata/{pages,ranked}.json
   presence/                    // PresenceService (bound): SetEnabled, SetNowPlaying; actor; pipe via os.OpenFile
   update/                      // UpdateService (bound): app.Updater + GitHub provider (ChecksumAsset, HTTPClient from netx)
   uninstall/                   // UninstallService (bound): Removable, Start; helper.go (spawn with breakaway fallback)
-  events/                      // RegisterEvent[...] calls + payload structs
+  events/                      // RegisterEvent[...] calls + payload structs (the import:* events live in importer: their payload carries upload.Staged, and upload → session → events would be a cycle)
 ```
 
 Seams:
@@ -768,7 +769,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `netx`, `backend` (errors, `Retry-After`) | `port-sandbox/gotests/netx` | `netx_test.go` |
 | `upload` | `port-sandbox/gotests/upload` | `upload_test.go`; `probe_test.go` asserting the ffprobe results directly (the `music-metadata` comparison through `fixtures/mm.ts` stays in the reference); `gen.sh` moves to `internal/upload/testdata/`, and the tests run it with the managed ffmpeg when the git-ignored fixtures are missing. Without a managed ffprobe (as in CI) the probe tests skip |
 | `importer` | `port-sandbox/gotests/importer` | `importer_test.go` |
-| `search` | `port-sandbox/gotests/search`, `port-sandbox/gotests/ranking` | `search_test.go`; `rank_test.go` against `testdata/pages.json` and the golden `testdata/ranked.json` (§3.5) |
+| `search` | `port-sandbox/gotests/search`, `port-sandbox/gotests/ranking` | `search_test.go`; `rank_test.go` against `testdata/pages.json` (the sandbox's `all-pages.json`: 20 real + 11 synthetic pages) and the golden `testdata/ranked.json` (§3.5), written with `go test -update` after the fold variant again matched TS on 29/31 pages, the two differences being the improvements in §3.5 |
 | `presence` | `port-sandbox/gotests/presence`, `port-sandbox/gotests/pipe` | `presence_test.go`, `pipe_test.go` |
 | `platform` | `port-sandbox/gotests/winproc` | `winproc_test.go`, `env_test.go`, `ytdlp_test.go` |
 | `update` | `port-sandbox/gotests/updatertest` | `updater_test.go` |
@@ -797,3 +798,4 @@ Every claim in this report that is not yet proven is listed here. Other sections
 ## 8. Open questions
 
 1. **Renderer crash seen once (watch item).** The first version of `port-sandbox/cdp/probe-audio.ts` crashed the WebView2 renderer three runs in a row. It crashed in the step that starts playback, `/head` decoding and a Web Audio graph together. Nine isolated and combined variants (`port-sandbox/cdp/probe-crash.ts`, `probe-crash2.ts`) and the final probe never crashed. Whether it can happen in the app is open; the manual check in §7 is how the first phase watches for it.
+2. **Search ranking quality.** The user reports that today's ranking often misses the result they wanted. The port keeps it as is (§3.5), so `ranked.json` guards against accidental change, not for quality. Reworking it is a separate task; `go test -update` rewrites the golden file when the ranking changes on purpose.

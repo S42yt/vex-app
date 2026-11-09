@@ -53,7 +53,7 @@ func TestProbe(t *testing.T) {
 func TestStageServesCover(t *testing.T) {
 	bin := managedBin(t)
 	u := &UploadService{Bin: bin, CoverURL: func(id string) string { return "L/" + id }}
-	got, err := u.Stage(context.Background(), []string{filepath.Join("testdata", "tagged.mp3"), filepath.Join("testdata", "cover.jpg")})
+	got, err := u.Stage(context.Background(), []string{filepath.Join("testdata", "tagged.mp3"), filepath.Join("testdata", "cover.jpg")}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

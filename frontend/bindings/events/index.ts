@@ -29,6 +29,21 @@ export const BinariesInstalled = "binaries:installed";
 export const BinariesProgress = "binaries:progress";
 
 /**
+ * Name of the custom event "import:failed".
+ */
+export const ImportFailed = "import:failed";
+
+/**
+ * Name of the custom event "import:progress".
+ */
+export const ImportProgress = "import:progress";
+
+/**
+ * Name of the custom event "import:staged".
+ */
+export const ImportStaged = "import:staged";
+
+/**
  * Name of the custom event "session:expired".
  */
 export const SessionExpired = "session:expired";

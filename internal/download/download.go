@@ -79,7 +79,7 @@ func save(r io.Reader, dir, name string) (string, error) {
 	br := bufio.NewReader(r)
 	head, _ := br.Peek(12)
 	ext := extensionOf(head)
-	f, err := create(dir, fitName(dir, sanitize(name), ext), ext)
+	f, err := create(dir, fitName(dir, SafeName(name, "Track"), ext), ext)
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +145,8 @@ func utf16Len(s string) int {
 	return n
 }
 
-func sanitize(name string) string {
+// SafeName replaces the characters Windows refuses in a file name.
+func SafeName(name, fallback string) string {
 	cleaned := strings.TrimSpace(strings.Map(func(r rune) rune {
 		if r < 0x20 || strings.ContainsRune(`\/:*?"<>|`, r) {
 			return '_'
@@ -153,7 +154,7 @@ func sanitize(name string) string {
 		return r
 	}, name))
 	if cleaned == "" {
-		return "Track"
+		return fallback
 	}
 	return cleaned
 }

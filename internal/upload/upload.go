@@ -39,6 +39,13 @@ type entry struct {
 	path       string
 	durationMs int
 	cover      []byte
+	owned      bool // an import's output, deleted once uploaded or discarded
+}
+
+func (e *entry) done() {
+	if e.owned {
+		os.Remove(e.path)
+	}
 }
 
 // UploadService is bound.
@@ -66,14 +73,14 @@ func (u *UploadService) Pick(ctx context.Context) ([]Staged, error) {
 	if err != nil {
 		return nil, err
 	}
-	return u.Stage(ctx, paths)
+	return u.Stage(ctx, paths, false)
 }
 
 // Stage reads each file's title, duration and cover. Files over the limit are refused
-// before they are read.
+// before they are read. Owned files are deleted once uploaded or discarded.
 //
 //wails:ignore
-func (u *UploadService) Stage(ctx context.Context, paths []string) ([]Staged, error) {
+func (u *UploadService) Stage(ctx context.Context, paths []string, owned bool) ([]Staged, error) {
 	unlock, err := datadirs.LockBin(u.Bin, false, false)
 	if err != nil {
 		return nil, err
@@ -112,7 +119,7 @@ func (u *UploadService) Stage(ctx context.Context, paths []string) ([]Staged, er
 		if u.staged == nil {
 			u.staged = map[string]*entry{}
 		}
-		u.staged[s.ID] = &entry{path: path, durationMs: s.DurationMs, cover: p.Cover}
+		u.staged[s.ID] = &entry{path: path, durationMs: s.DurationMs, cover: p.Cover, owned: owned}
 		u.mu.Unlock()
 		out = append(out, s)
 	}
@@ -136,7 +143,10 @@ func (u *UploadService) Discard(ids []string) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	for _, id := range ids {
-		delete(u.staged, id)
+		if e := u.staged[id]; e != nil {
+			e.done()
+			delete(u.staged, id)
+		}
 	}
 }
 
@@ -163,6 +173,7 @@ func (u *UploadService) Confirm(ctx context.Context, p ConfirmParams) error {
 		return errors.New("This track is no longer waiting to upload.")
 	}
 	defer close(done)
+	defer e.done()
 	release, err := u.Busy.Acquire(busy.Transfer)
 	if err != nil {
 		return err

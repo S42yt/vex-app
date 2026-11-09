@@ -97,7 +97,7 @@ func TestStreamedUploadMaxSize(t *testing.T) {
 func TestTooLargeRefusedBeforeReading(t *testing.T) {
 	path, _ := writeRandom(t, "big.mp3", MaxAudioBytes+1)
 	u := &UploadService{Bin: t.TempDir()}
-	got, err := u.Stage(context.Background(), []string{path})
+	got, err := u.Stage(context.Background(), []string{path}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,9 +129,11 @@ func TestConfirmQueue(t *testing.T) {
 	reg := &busy.Registry{}
 	u := &UploadService{Busy: reg, Store: store, staged: map[string]*entry{}}
 	titles := []string{"one", "two", "three"}
+	paths := map[string]string{}
 	for _, title := range titles {
 		path, _ := writeRandom(t, title+".mp3", 1000)
-		u.staged[title] = &entry{path: path, durationMs: 1000}
+		paths[title] = path
+		u.staged[title] = &entry{path: path, durationMs: 1000, owned: title == "one"}
 	}
 
 	errs := make(chan error, len(titles))
@@ -151,6 +153,12 @@ func TestConfirmQueue(t *testing.T) {
 	}
 	if strings.Join(order, ",") != "one,two,three" || reg.Held(busy.Transfer) != 0 {
 		t.Fatalf("order %v, held %d", order, reg.Held(busy.Transfer))
+	}
+	if _, err := os.Stat(paths["one"]); err == nil {
+		t.Fatal("an import's file outlived its upload")
+	}
+	if _, err := os.Stat(paths["two"]); err != nil {
+		t.Fatal("a picked file was deleted")
 	}
 	if err := u.Confirm(context.Background(), ConfirmParams{StagedID: "one"}); err == nil {
 		t.Fatal("a staged file uploaded twice")
