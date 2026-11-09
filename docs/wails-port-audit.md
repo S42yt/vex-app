@@ -781,7 +781,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `datadirs` | `port-sandbox/gotests/datadirs` | `datadirs_test.go`, `binlock_test.go` |
 | `busy` | `port-sandbox/gotests/busy` | `busy_test.go` |
 | `session` | `port-sandbox/gotests/session` | `session_test.go` |
-| `media` | `port-sandbox/gotests/media` (`Event` stays only as the unexported `onEvent` hook the tests read) | `server_test.go`, `fakebackend.go` |
+| `media` | `port-sandbox/gotests/media` (`Event` stays only as the unexported `onEvent` hook the tests read) | `server_test.go`; `fakebackend.go` as `media/mediatest`, which `netx_test.go` also uses |
 | `netx`, `backend` (errors, `Retry-After`) | `port-sandbox/gotests/netx` | `netx_test.go` |
 | `upload` | `port-sandbox/gotests/upload` | `upload_test.go`; `probe_test.go` asserting the ffprobe results directly (the `music-metadata` comparison through `fixtures/mm.ts` stays in the reference); `gen.sh` moves to `internal/upload/testdata/`, and the tests run it with the managed ffmpeg when the git-ignored fixtures are missing. Without a managed ffprobe (as in CI) the probe tests skip |
 | `importer` | `port-sandbox/gotests/importer` | `importer_test.go` |

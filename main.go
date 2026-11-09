@@ -48,19 +48,9 @@ func main() {
 	layout := datadirs.Default()
 	store := &session.Store{}
 	busyRegistry := &busy.Registry{}
-	proxy := func() string {
-		if cur, ok := store.Current(); ok {
-			return cur.Proxy
-		}
-		return ""
-	}
+	proxy := store.Proxy
 	binaryService := &binaries.BinaryService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy}
-	presenceService := &presence.PresenceService{BaseURL: func() string {
-		if cur, ok := store.Current(); ok {
-			return cur.BaseURL
-		}
-		return ""
-	}}
+	presenceService := &presence.PresenceService{BaseURL: store.BaseURL}
 	mediaSession := &session.MediaSession{Store: store}
 	mediaServer := media.New(mediaSession, trackCacheBytes)
 	uploads := &upload.UploadService{Bin: layout.Bin(), Busy: busyRegistry, Store: store, CoverURL: mediaServer.StagedCoverURL}

@@ -11,7 +11,7 @@ import (
 func TestExtractAndStatus(t *testing.T) {
 	bin := t.TempDir()
 	b := &BinaryService{Bin: bin}
-	if st, _ := b.status(); len(st.Missing) != 3 || len(st.Installed) != 0 {
+	if st := b.GetBinaryStatus(); len(st.Missing) != 3 || len(st.Installed) != 0 {
 		t.Fatalf("empty dir: %+v", st)
 	}
 
@@ -35,18 +35,16 @@ func TestExtractAndStatus(t *testing.T) {
 	}
 
 	// Files alone don't count; the manifest says the install finished.
-	if st, _ := b.status(); slices.Contains(st.Installed, FFmpeg) {
+	if st := b.GetBinaryStatus(); slices.Contains(st.Installed, FFmpeg) {
 		t.Fatal("installed without a manifest entry")
 	}
 	m := b.readManifest()
 	m.FFmpeg = &installed{true}
-	m.YtDlp = &struct {
-		Version string `json:"version,omitempty"`
-	}{"2026.10.01"}
+	m.YtDlp = &ytDlpEntry{"2026.10.01"}
 	if err := b.writeManifest(m); err != nil {
 		t.Fatal(err)
 	}
-	st, _ := b.status()
+	st := b.GetBinaryStatus()
 	if !slices.Equal(st.Installed, []Name{FFmpeg}) || !slices.Equal(st.Missing, []Name{YtDlp, Deno}) || st.YtDlpVersion != "" {
 		t.Fatalf("%+v", st)
 	}

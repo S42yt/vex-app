@@ -15,14 +15,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/VexWave/vex-app/internal/media"
+	"github.com/VexWave/vex-app/internal/media/mediatest"
 	"github.com/VexWave/vex-app/internal/netx"
 	"golang.org/x/net/http/httpproxy"
 )
 
-func gzipBackend() (*media.FakeBackend, *httptest.Server) {
+func gzipBackend() (*mediatest.FakeBackend, *httptest.Server) {
 	data := bytes.Repeat([]byte("audio-bytes "), 100_000)
-	be := &media.FakeBackend{Token: "t", Tracks: map[string][]byte{"a": data}, ContentType: "audio/mpeg", GzipIfAsked: true}
+	be := &mediatest.FakeBackend{Token: "t", Tracks: map[string][]byte{"a": data}, ContentType: "audio/mpeg", GzipIfAsked: true}
 	return be, httptest.NewServer(be)
 }
 

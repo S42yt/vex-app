@@ -65,27 +65,18 @@ func parts(n Name) []part {
 	}
 }
 
-func expected(n Name) []string {
-	switch n {
-	case YtDlp:
-		return []string{"yt-dlp.exe"}
-	case FFmpeg:
-		return []string{"ffmpeg.exe", "ffprobe.exe"}
-	default:
-		return []string{"deno.exe"}
-	}
-}
-
 type installed struct {
 	Installed bool `json:"installed"`
 }
 
+type ytDlpEntry struct {
+	Version string `json:"version,omitempty"`
+}
+
 type manifest struct {
-	YtDlp *struct {
-		Version string `json:"version,omitempty"`
-	} `json:"ytDlp,omitempty"`
-	FFmpeg *installed `json:"ffmpeg,omitempty"`
-	Deno   *installed `json:"deno,omitempty"`
+	YtDlp  *ytDlpEntry `json:"ytDlp,omitempty"`
+	FFmpeg *installed  `json:"ffmpeg,omitempty"`
+	Deno   *installed  `json:"deno,omitempty"`
 }
 
 func (m *manifest) has(n Name) bool {
@@ -114,19 +105,16 @@ type Status struct {
 	YtDlpVersion string `json:"ytDlpVersion,omitempty"`
 }
 
-func (b *BinaryService) GetBinaryStatus() (*Status, error) {
-	st, _ := b.status()
-	return st, nil
-}
-
-func (b *BinaryService) status() (*Status, *manifest) {
+func (b *BinaryService) GetBinaryStatus() *Status {
 	m := b.readManifest()
 	st := &Status{Installed: []Name{}, Missing: []Name{}}
 	for _, n := range all {
 		ok := m.has(n)
-		for _, f := range expected(n) {
-			if fi, err := os.Stat(filepath.Join(b.Bin, f)); err != nil || !fi.Mode().IsRegular() {
-				ok = false
+		for _, p := range parts(n) {
+			for _, f := range p.files {
+				if fi, err := os.Stat(filepath.Join(b.Bin, f.dest)); err != nil || !fi.Mode().IsRegular() {
+					ok = false
+				}
 			}
 		}
 		if ok {
@@ -138,7 +126,7 @@ func (b *BinaryService) status() (*Status, *manifest) {
 	if slices.Contains(st.Installed, YtDlp) {
 		st.YtDlpVersion = m.YtDlp.Version
 	}
-	return st, m
+	return st
 }
 
 type ProxyParams struct {
@@ -188,8 +176,7 @@ func (b *BinaryService) run(names []Name, proxy string, wait bool) {
 		}
 		defer os.RemoveAll(tmp)
 		if names == nil {
-			st, _ := b.status()
-			names = st.Missing
+			names = b.GetBinaryStatus().Missing
 		}
 		for _, n := range names {
 			current = n
@@ -233,9 +220,7 @@ func (b *BinaryService) installOne(n Name, tmp, proxy string) error {
 	m := b.readManifest()
 	switch n {
 	case YtDlp:
-		m.YtDlp = &struct {
-			Version string `json:"version,omitempty"`
-		}{b.ytDlpVersion()}
+		m.YtDlp = &ytDlpEntry{b.ytDlpVersion()}
 	case FFmpeg:
 		m.FFmpeg = &installed{true}
 	default:

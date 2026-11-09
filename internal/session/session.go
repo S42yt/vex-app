@@ -25,6 +25,22 @@ func (s *Store) Logout()                   { s.cur.Store(nil) }
 // Expire drops the session only if it is still the one that got the 401.
 func (s *Store) Expire(seen *Session) bool { return s.cur.CompareAndSwap(seen, nil) }
 
+// Proxy is the current session's proxy, or "" while logged out.
+func (s *Store) Proxy() string {
+	if p := s.cur.Load(); p != nil {
+		return p.Proxy
+	}
+	return ""
+}
+
+// BaseURL is the current session's backend, or "" while logged out.
+func (s *Store) BaseURL() string {
+	if p := s.cur.Load(); p != nil {
+		return p.BaseURL
+	}
+	return ""
+}
+
 // SetProxy probes with the new proxy, then swaps it in only if no login/logout happened meanwhile.
 func (s *Store) SetProxy(ctx context.Context, proxy string, probe func(context.Context, Session) error) error {
 	old := s.cur.Load()

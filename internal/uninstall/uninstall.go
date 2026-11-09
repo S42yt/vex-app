@@ -40,12 +40,7 @@ func installDir(base registry.Key, path, key, exe string) (string, bool) {
 	if key == "" {
 		return "", false
 	}
-	k, err := registry.OpenKey(base, path+`\`+key, registry.QUERY_VALUE)
-	if err != nil {
-		return "", false
-	}
-	defer k.Close()
-	s, _, err := k.GetStringValue("UninstallString")
+	s, err := datadirs.UninstallString(base, path, key)
 	if err != nil || s == "" {
 		return "", false
 	}
@@ -149,14 +144,13 @@ func Helper(pid, dir string) error {
 
 // RemoveData is the --remove-data mode the NSIS uninstaller runs: it applies the uninstall rule to this channel.
 func RemoveData() error {
-	var others []datadirs.Channel
+	var others []string
 	for ch, key := range buildinfo.UninstallKeys {
 		if ch != buildinfo.Channel {
-			others = append(others, datadirs.Channel{Name: ch, UninstallKey: key})
+			others = append(others, key)
 		}
 	}
-	_, err := datadirs.Default().RemoveData(buildinfo.Channel, others, func(c datadirs.Channel) (bool, error) {
-		return datadirs.Installed(registry.CURRENT_USER, datadirs.UninstallPath, c.UninstallKey)
+	return datadirs.Default().RemoveData(buildinfo.Channel, others, func(key string) (bool, error) {
+		return datadirs.Installed(registry.CURRENT_USER, datadirs.UninstallPath, key)
 	})
-	return err
 }

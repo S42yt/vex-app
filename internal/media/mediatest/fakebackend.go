@@ -1,4 +1,5 @@
-package media
+// Package mediatest is a fake backend audio route for tests of the code that streams from it.
+package mediatest
 
 import (
 	"bytes"

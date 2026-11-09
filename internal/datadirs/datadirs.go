@@ -23,36 +23,41 @@ func (l Layout) Channel(ch string) string { return filepath.Join(l.Root, ch) }
 func (l Layout) Webview(ch string) string { return filepath.Join(l.Root, ch, "webview") }
 func (l Layout) Imports(ch string) string { return filepath.Join(l.Root, ch, "imports") }
 
-// Channel is an installable channel and the name of its Uninstall key (NSIS UNINST_KEY_NAME).
-type Channel struct{ Name, UninstallKey string }
-
-// Installed reports whether <path>\<key> exists under base and carries an UninstallString.
-func Installed(base registry.Key, path, key string) (bool, error) {
+// UninstallString reads <path>\<key>\UninstallString under base; it is "" when the key or
+// the value is absent.
+func UninstallString(base registry.Key, path, key string) (string, error) {
 	k, err := registry.OpenKey(base, path+`\`+key, registry.QUERY_VALUE)
 	if errors.Is(err, registry.ErrNotExist) {
-		return false, nil
+		return "", nil
 	}
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	defer k.Close()
 	s, _, err := k.GetStringValue("UninstallString")
 	if errors.Is(err, registry.ErrNotExist) {
-		return false, nil
+		return "", nil
 	}
+	return s, err
+}
+
+// Installed reports whether the channel whose Uninstall key is key is installed.
+func Installed(base registry.Key, path, key string) (bool, error) {
+	s, err := UninstallString(base, path, key)
 	return s != "", err
 }
 
-// RemoveData deletes self's folder, then bin\ and the root unless another channel is
-// installed. A registry error counts as installed: shared data is kept when unsure.
-func (l Layout) RemoveData(self string, others []Channel, installed func(Channel) (bool, error)) (sharedRemoved bool, err error) {
+// RemoveData deletes self's folder, then bin\ and the root unless a channel with one of the
+// others' Uninstall keys is installed. A registry error counts as installed: shared data is
+// kept when unsure.
+func (l Layout) RemoveData(self string, others []string, installed func(key string) (bool, error)) error {
 	if err := os.RemoveAll(l.Channel(self)); err != nil {
-		return false, err
+		return err
 	}
-	for _, c := range others {
-		if ok, err := installed(c); ok || err != nil {
-			return false, nil
+	for _, key := range others {
+		if ok, err := installed(key); ok || err != nil {
+			return nil
 		}
 	}
-	return true, os.RemoveAll(l.Root)
+	return os.RemoveAll(l.Root)
 }

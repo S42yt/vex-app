@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/VexWave/vex-app/internal/media/mediatest"
 )
 
 type fixedSession struct {
@@ -27,7 +29,7 @@ func streamClient() *http.Client {
 }
 
 type rig struct {
-	be     *FakeBackend
+	be     *mediatest.FakeBackend
 	beSrv  *httptest.Server
 	sess   *fixedSession
 	proxy  *Server
@@ -38,7 +40,7 @@ func newRig(t *testing.T, size, rate int) *rig {
 	t.Helper()
 	data := make([]byte, size)
 	rand.Read(data)
-	be := &FakeBackend{Token: "tok", Tracks: map[string][]byte{"t1": data}, ContentType: "audio/mpeg", BytesPerSec: rate}
+	be := &mediatest.FakeBackend{Token: "tok", Tracks: map[string][]byte{"t1": data}, ContentType: "audio/mpeg", BytesPerSec: rate}
 	beSrv := httptest.NewServer(be)
 	sess := &fixedSession{r: Route{BaseURL: beSrv.URL, Token: "tok", Client: streamClient()}, ok: true}
 	p := New(sess, 256<<20)

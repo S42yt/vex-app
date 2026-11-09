@@ -10,13 +10,13 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-var channels = []Channel{{"stable", "VexWave"}, {"canary", "VexWave Canary"}}
+var channels = map[string]string{"stable": "VexWave", "canary": "VexWave Canary"}
 
-func others(self string) []Channel {
-	var out []Channel
-	for _, c := range channels {
-		if c.Name != self {
-			out = append(out, c)
+func others(self string) []string {
+	var out []string
+	for ch, key := range channels {
+		if ch != self {
+			out = append(out, key)
 		}
 	}
 	return out
@@ -39,8 +39,8 @@ func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 func testKeys(t *testing.T) (path string, install func(name string), uninstall func(name string)) {
 	path = fmt.Sprintf(`Software\VexWavePortTest-%d\Uninstall`, os.Getpid())
 	t.Cleanup(func() {
-		for _, c := range channels {
-			registry.DeleteKey(registry.CURRENT_USER, path+`\`+c.UninstallKey)
+		for _, key := range channels {
+			registry.DeleteKey(registry.CURRENT_USER, path+`\`+key)
 		}
 		registry.DeleteKey(registry.CURRENT_USER, path)
 		registry.DeleteKey(registry.CURRENT_USER, filepath.Dir(path))
@@ -92,37 +92,35 @@ func TestInstalledReadsHKCU(t *testing.T) {
 func TestUninstallRule(t *testing.T) {
 	path, install, uninstall := testKeys(t)
 	l := populate(t)
-	check := func(c Channel) (bool, error) { return Installed(registry.CURRENT_USER, path, c.UninstallKey) }
+	check := func(key string) (bool, error) { return Installed(registry.CURRENT_USER, path, key) }
 	install("VexWave")
 	install("VexWave Canary")
 
 	uninstall("VexWave Canary") // NSIS removes its own key; order relative to RemoveData doesn't matter
-	shared, err := l.RemoveData("canary", others("canary"), check)
-	if err != nil || shared {
-		t.Fatalf("canary: shared=%v err=%v", shared, err)
+	if err := l.RemoveData("canary", others("canary"), check); err != nil {
+		t.Fatal(err)
 	}
 	if exists(l.Channel("canary")) || !exists(l.Bin()) || !exists(l.Webview("stable")) {
 		t.Fatal("canary uninstall touched more or less than its own folder")
 	}
 
 	uninstall("VexWave")
-	shared, err = l.RemoveData("stable", others("stable"), check)
-	if err != nil || !shared || exists(l.Root) {
-		t.Fatalf("last channel: shared=%v err=%v root=%v", shared, err, exists(l.Root))
+	if err := l.RemoveData("stable", others("stable"), check); err != nil || exists(l.Root) {
+		t.Fatalf("last channel: err=%v root=%v", err, exists(l.Root))
 	}
 }
 
 func TestUninstallKeepsSharedWhenUnsure(t *testing.T) {
 	l := populate(t)
-	shared, err := l.RemoveData("canary", others("canary"), func(Channel) (bool, error) { return false, errors.New("access denied") })
-	if err != nil || shared || !exists(l.Bin()) {
+	err := l.RemoveData("canary", others("canary"), func(string) (bool, error) { return false, errors.New("access denied") })
+	if err != nil || !exists(l.Bin()) {
 		t.Fatal("registry error removed shared data")
 	}
 }
 
 func TestUninstallToleratesMissingFolders(t *testing.T) {
 	l := Layout{filepath.Join(t.TempDir(), "never-created")}
-	if _, err := l.RemoveData("stable", others("stable"), func(Channel) (bool, error) { return false, nil }); err != nil {
+	if err := l.RemoveData("stable", others("stable"), func(string) (bool, error) { return false, nil }); err != nil {
 		t.Fatal(err)
 	}
 }
