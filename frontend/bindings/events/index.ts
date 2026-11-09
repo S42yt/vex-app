@@ -44,6 +44,11 @@ export const ImportProgress = "import:progress";
 export const ImportStaged = "import:staged";
 
 /**
+ * Name of the custom event "presence:status".
+ */
+export const PresenceStatus = "presence:status";
+
+/**
  * Name of the custom event "session:expired".
  */
 export const SessionExpired = "session:expired";

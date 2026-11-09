@@ -236,7 +236,7 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | Search ranking | `searchRanking.ts` | Re-rank one page | Go port with rune lengths, case folding, stable sort | Yes (§3.5) | med | test (`port-sandbox/gotests/ranking`) |
 | Busy flags & quit guard | `index.ts:77-123` | No yt-dlp overwrite while running; no quit mid-transfer | `busy.Registry.Acquire(kind)`, atomic | Yes: race-free | med | test (`busy_test.go`) |
 | Session swap | `ApiClient.ts:95-151` | Login/logout/proxy change while requests run | Immutable session behind `atomic.Pointer`, CAS | Yes: fixes a stale-401 logout | med | test (`port-sandbox/gotests/session`) |
-| Discord Rich Presence | `DiscordPresence.ts` | Activity card over local IPC | One actor goroutine; `os.OpenFile` on the named pipe | Yes: no timer fields, no `go-winio` | med | test (`presence`, `pipe`); live Discord: §7 |
+| Discord Rich Presence | `DiscordPresence.ts` | Activity card over local IPC | One actor goroutine; `winio.DialPipeContext` on the named pipe | Yes: no timer fields | med | test (`presence`, `pipe`); live Discord: §7 |
 | App updater | `AppUpdater.ts`, `download.ts`, `appRelease.ts`, `detachedHelper.ts` | Download, verify, install, relaunch (stable only) | `app.Updater` + GitHub provider + `SHA256SUMS`, `WindowNone`, own banner; never set up on canary | Yes: no PowerShell | med | test (`port-sandbox/gotests/updatertest`); `Restart` swap: §7 |
 | Uninstaller | `Uninstaller.ts`, `detachedHelper.ts` | Remove an install the app can't delete | NSIS `uninstall.exe /S` from a Go helper mode; the uninstaller runs the app's `--remove-data` mode | Yes | med | test (`datadirs_test.go`, job state); NSIS run: §7 |
 | Dark title bar & icon | `WindowChrome.ts`, `scripts/stamp-win-icons.ts` | Dark caption; embedded icon | `WindowsWindow.Theme` + `CustomTheme`; icon via build assets | Yes: deleted | low | src (`webview_window_options.go:366-372,439-450`); rendering: §7 |
@@ -374,6 +374,7 @@ The ≤ 40 ms duration differences are below the contract's resolution of intere
 - **Errors:** a returned error rejects with `RuntimeError`. `message` is `err.Error()`, and `cause` is the error marshalled with `encoding/json` (`wails:v3/pkg/application/bindings.go:37`): `{status:429, retryAfterSec:30, error:"…"}` for a struct with json tags, `{}` for `errors.New`. `ServiceOptions.MarshalError` can override it (`wails:v3/pkg/application/services.go:31-39`).
 - **Events:** `application.RegisterEvent[T](name)` (`wails:v3/pkg/application/events.go:327`) produces typed name constants in `bindings/events`. `Events.On(name, ev => ev.data)` received exactly the emitted structs.
 - **No call timeout:** a 9.2 s call completed.
+- **Ordering:** a call's reply and an event emitted after it can reach the webview in either order (§3.7, status ordering).
 
 **Facade.** `api/rpc.ts` (`frontend/src/api/rpc.ts`) stays the only module that imports Wails. It re-exports `bun.*`, `onBunMessage` and `notifyBun` with today's signatures, and wraps each generated call in a `settle()` that resolves `{ok: true, …}` or maps `RuntimeError` to `RpcFailure` (`error: e.message`, `status: e.cause?.status`, `retryAfterSec: e.cause?.retryAfterSec`). Then none of the call sites in §4 change, and `mutate.ts` and the `Retry-After` handling (`SessionService.ts:168-172`) keep working.
 
@@ -460,10 +461,14 @@ Two more findings:
 ### 3.7 Discord Rich Presence — **med**
 
 Actor design and evidence in §3.4.
-- **Transport:** the IPC pipe opens with the standard library. `os.OpenFile(`\\.\pipe\discord-ipc-N`, os.O_RDWR, 0)` reads and writes, and `Close` from another goroutine releases a blocked `Read`, which is what the actor needs for disable and quit (`port-sandbox/gotests/pipe/pipe_test.go`, against a `winio.ListenPipe` server). A missing pipe fails at once. So `github.com/Microsoft/go-winio` isn't needed in the app.
-- **Busy pipes:** unlike `winio.DialPipe`, `os.OpenFile` doesn't retry `ERROR_PIPE_BUSY`. The sweep treats "busy" like "absent" and tries the next index or the 10 s retry.
+- **Transport:** `github.com/Microsoft/go-winio`'s `DialPipeContext`. The standard library doesn't work for this, which the sandbox missed because it never wrote while a read was pending, and the actor always does (its reader goroutine waits on the pipe between Discord's frames):
+  - `os.OpenFile` opens a synchronous handle, and a `Write` waits behind the pending `Read` until Discord sends something, so SET_ACTIVITY stalls.
+  - `windows.CreateFile(…, FILE_FLAG_OVERLAPPED)` + `os.NewFile` lets the write through, but Go's poller updates the file offset from `Read` and `Write` without a shared lock on a pipe (`internal/poll/fd_windows.go`, `addOffset`), so `go test -race` fails inside the standard library.
+
+  `Close` from the actor releases the blocked `Read`, which disable and quit need. A missing pipe fails at once. A busy pipe counts as absent after 500 ms, and the sweep moves to the next index or the 10 s retry.
+- **Status ordering:** a `presence:status` event can reach the webview before the reply to an earlier `SetEnabled` call, which Electrobun's RPC never did. The fake Discord answers within a millisecond, so in the app the stale "offline" reply overwrote "connected". The actor numbers every status it hands out (`seq`), and the facade keeps the newest.
 - **Framing and helpers:** `binary.LittleEndian` frames written in one `Write`, `os.Getpid()`, `net/netip` for the routability check (`DiscordPresence.ts:384-415`), and rune-based `clampText` (`:417-422`).
-- **Live Discord** (handshake, nonce replies, activity refusal) is still to check (§7). The tests use a fake server speaking the same framing.
+- **Live Discord** (handshake, nonce replies, activity refusal) is still to check (§7). The tests run a fake Discord on a real named pipe (`winio.ListenPipe`, at index 3 so the sweep is exercised), and the app was checked end to end against one on `discord-ipc-0`: Settings shows Connected, playing sends SET_ACTIVITY, and switching it off closes the pipe.
 
 ### 3.8 WebView2 profile and saved login — **low**
 
@@ -737,7 +742,7 @@ internal/
   ytdlp/                       // Command (base args, proxy env), Lines, Tail + Failure (last ERROR: line); ytdlptest builds a fake yt-dlp.exe
   importer/                    // ImportService (bound): Start, Discard; worker goroutine; avatar
   search/                      // SearchService (bound): Search; rank.go (pure, cases.Fold) + rank_test.go + testdata/{pages,ranked}.json
-  presence/                    // PresenceService (bound): SetEnabled, SetNowPlaying; actor; pipe via os.OpenFile
+  presence/                    // PresenceService (bound): SetEnabled, SetNowPlaying; actor; pipe via go-winio (§3.7)
   update/                      // UpdateService (bound): app.Updater + GitHub provider (ChecksumAsset, HTTPClient from netx)
   uninstall/                   // UninstallService (bound): Removable, Start; helper.go (spawn with breakaway fallback)
   events/                      // RegisterEvent[...] calls + payload structs (the import:* events live in importer: their payload carries upload.Staged, and upload → session → events would be a cycle)
@@ -770,7 +775,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `upload` | `port-sandbox/gotests/upload` | `upload_test.go`; `probe_test.go` asserting the ffprobe results directly (the `music-metadata` comparison through `fixtures/mm.ts` stays in the reference); `gen.sh` moves to `internal/upload/testdata/`, and the tests run it with the managed ffmpeg when the git-ignored fixtures are missing. Without a managed ffprobe (as in CI) the probe tests skip |
 | `importer` | `port-sandbox/gotests/importer` | `importer_test.go` |
 | `search` | `port-sandbox/gotests/search`, `port-sandbox/gotests/ranking` | `search_test.go`; `rank_test.go` against `testdata/pages.json` (the sandbox's `all-pages.json`: 20 real + 11 synthetic pages) and the golden `testdata/ranked.json` (§3.5), written with `go test -update` after the fold variant again matched TS on 29/31 pages, the two differences being the improvements in §3.5 |
-| `presence` | `port-sandbox/gotests/presence`, `port-sandbox/gotests/pipe` | `presence_test.go`, `pipe_test.go` |
+| `presence` | `port-sandbox/gotests/presence`, `port-sandbox/gotests/pipe` | `presence_test.go`, with the fake Discord on a real pipe; `pipe_test.go`'s findings are superseded by §3.7's transport bullet |
 | `platform` | `port-sandbox/gotests/winproc` | `winproc_test.go`, `env_test.go`, `ytdlp_test.go` |
 | `update` | `port-sandbox/gotests/updatertest` | `updater_test.go` |
 | `backend.Nullable`, error shape | `port-sandbox/app/probe.go` | the `port-sandbox/cdp/probe-bridge.ts` checks |

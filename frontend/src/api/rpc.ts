@@ -4,6 +4,7 @@ import * as Binaries from "../../bindings/github.com/VexWave/vex-app/internal/bi
 import * as Download from "../../bindings/github.com/VexWave/vex-app/internal/download/downloadservice";
 import * as Importer from "../../bindings/github.com/VexWave/vex-app/internal/importer/importservice";
 import * as Library from "../../bindings/github.com/VexWave/vex-app/internal/library/libraryservice";
+import * as Presence from "../../bindings/github.com/VexWave/vex-app/internal/presence/presenceservice";
 import * as Search from "../../bindings/github.com/VexWave/vex-app/internal/search/searchservice";
 import * as Session from "../../bindings/github.com/VexWave/vex-app/internal/session/sessionservice";
 import * as Upload from "../../bindings/github.com/VexWave/vex-app/internal/upload/uploadservice";
@@ -88,6 +89,14 @@ type Messages = {
 	presenceStatus: PresenceStatus;
 };
 
+// A status event can overtake the reply to an earlier setPresenceEnabled; Go numbers both,
+// so neither path can roll the status back.
+let presence: PresenceStatus & { seq: number } = { connection: "offline", seq: -1 };
+function newestPresence(s: PresenceStatus & { seq: number }): PresenceStatus {
+	if (s.seq > presence.seq) presence = s;
+	return presence;
+}
+
 const notPorted = (name: string) => () =>
 	Promise.reject(new Error(`${name} isn't ported yet`));
 
@@ -148,6 +157,10 @@ const ported: Partial<Requests> = {
 		settle(Search.Search(p), (results) => ({
 			results: results as MediaSearchResult[],
 		})),
+	setPresenceEnabled: (p) =>
+		Presence.SetEnabled(p).then((s) =>
+			newestPresence(s as PresenceStatus & { seq: number }),
+		),
 	checkYtDlpUpdate: () =>
 		Binaries.CheckYtDlpUpdate().then((r) => ({ ok: true as const, ...r })),
 };
@@ -168,6 +181,7 @@ const pushed: {
 		{ event: EventNames.BinariesFinished, wrap: () => ({ type: "finished" }) },
 		{ event: EventNames.BinariesFailed, wrap: (d) => ({ type: "failed", ...d }) },
 	],
+	presenceStatus: [{ event: EventNames.PresenceStatus, wrap: newestPresence }],
 	urlImportProgress: [
 		{ event: EventNames.ImportProgress, wrap: (d) => ({ type: "progress", ...d }) },
 		{ event: EventNames.ImportStaged, wrap: (d) => ({ type: "staged", ...d }) },
@@ -185,5 +199,7 @@ export function onBunMessage<K extends keyof Messages>(
 }
 
 export const notifyBun = {
-	presenceChanged(_message: PresenceMessage): void {},
+	presenceChanged(message: PresenceMessage): void {
+		void Presence.SetNowPlaying(message).catch(() => {});
+	},
 };

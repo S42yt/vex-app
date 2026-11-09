@@ -11,6 +11,9 @@ import type * as events$0 from "../../../../VexWave/vex-app/internal/events/mode
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import type * as importer$0 from "../../../../VexWave/vex-app/internal/importer/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import type * as presence$0 from "../../../../VexWave/vex-app/internal/presence/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
@@ -22,6 +25,7 @@ declare module "@wailsio/runtime" {
             "import:failed": importer$0.Failure;
             "import:progress": importer$0.Step;
             "import:staged": importer$0.Ready;
+            "presence:status": presence$0.Status;
             "session:expired": events$0.SessionExpiredData;
         }
     }

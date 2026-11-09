@@ -14,6 +14,7 @@ import (
 	"github.com/VexWave/vex-app/internal/importer"
 	"github.com/VexWave/vex-app/internal/library"
 	"github.com/VexWave/vex-app/internal/media"
+	"github.com/VexWave/vex-app/internal/presence"
 	"github.com/VexWave/vex-app/internal/search"
 	"github.com/VexWave/vex-app/internal/session"
 	"github.com/VexWave/vex-app/internal/upload"
@@ -36,6 +37,12 @@ func main() {
 		return ""
 	}
 	binaryService := &binaries.BinaryService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy}
+	presenceService := &presence.PresenceService{BaseURL: func() string {
+		if cur, ok := store.Current(); ok {
+			return cur.BaseURL
+		}
+		return ""
+	}}
 	mediaSession := &session.MediaSession{Store: store}
 	mediaServer := media.New(mediaSession, trackCacheBytes)
 	uploads := &upload.UploadService{Bin: layout.Bin(), Busy: busyRegistry, Store: store, CoverURL: mediaServer.StagedCoverURL}
@@ -73,6 +80,7 @@ func main() {
 			application.NewService(&download.DownloadService{Busy: busyRegistry, Tracks: mediaServer}),
 			application.NewService(imports),
 			application.NewService(&search.SearchService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy}),
+			application.NewService(presenceService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -94,6 +102,7 @@ func main() {
 	mediaSession.Events = app.Event
 	binaryService.Events = app.Event
 	imports.Events = app.Event
+	presenceService.Events = app.Event
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "VexWave",
