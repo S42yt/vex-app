@@ -2,8 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ["**"]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -34,10 +33,12 @@ jobs:
 
       - run: bun install --frozen-lockfile
         working-directory: frontend
+      # go test runs contract/check.ts, so this install comes before the Go step.
       - run: bun install --frozen-lockfile
         working-directory: contract
 
-      - name: Type-check contract
+      # contract/tsconfig.json also covers scripts/.
+      - name: Type-check contract and scripts
         run: bunx tsc --noEmit
         working-directory: contract
 
@@ -51,6 +52,8 @@ jobs:
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
           go test -race ./...
+          # The release build's tags; nothing above compiles the files behind them.
+          go build -tags production,stable ./...
 
       - name: Generated files are current
         run: |

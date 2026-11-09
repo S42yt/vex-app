@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/VexWave/vex-app/internal/backend"
+	"github.com/VexWave/vex-app/internal/backend/contracttest"
 	"github.com/VexWave/vex-app/internal/busy"
 	"github.com/VexWave/vex-app/internal/session"
 )
@@ -176,4 +177,32 @@ func TestClampTitle(t *testing.T) {
 			t.Errorf("clampTitle(%.20q) = %.20q", in, got)
 		}
 	}
+}
+
+// The streamed upload body parses under the contract with no field ignored.
+func TestPostTrackContract(t *testing.T) {
+	path, _ := writeRandom(t, "track.mp3", 1000)
+	rec := &contracttest.Recorder{}
+	srv := httptest.NewServer(rec)
+	defer srv.Close()
+	c := &backend.Client{BaseURL: srv.URL, Token: "tok", HTTP: srv.Client()}
+	for _, m := range []meta{
+		{Title: "T"},
+		{Title: "T", Duration: backend.MaxDurationMs, ArtistIDs: []int32{3, 9}, Cover: "AQID"},
+	} {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, stop, err := body(m, f)
+		if err == nil {
+			err = c.PostTrack(context.Background(), b)
+			stop()
+		}
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	contracttest.Check(t, rec.Seen())
 }
