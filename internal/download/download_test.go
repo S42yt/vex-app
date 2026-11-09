@@ -54,3 +54,15 @@ func TestFitName(t *testing.T) {
 		t.Fatalf("name is %d bytes", len(got))
 	}
 }
+
+func TestStartFolderFallsBackWhenGone(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	dir := t.TempDir()
+	file := filepath.Join(dir, "f")
+	os.WriteFile(file, nil, 0o644)
+	for in, want := range map[string]string{dir: dir, "": home, filepath.Join(dir, "gone"): home, file: home} {
+		if got := startFolder(in); got != want {
+			t.Errorf("startFolder(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

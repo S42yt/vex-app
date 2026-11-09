@@ -42,21 +42,20 @@ type Saved struct {
 }
 
 func (d *DownloadService) SaveTrack(ctx context.Context, p SaveParams) (Saved, error) {
-	start := p.StartingFolder
-	if start == "" {
-		start, _ = os.UserHomeDir()
-	}
 	dir, err := application.Get().Dialog.OpenFile().
 		CanChooseFiles(false).
 		CanChooseDirectories(true).
-		SetDirectory(start).
+		SetDirectory(startFolder(p.StartingFolder)).
 		PromptForSingleSelection()
 	// The dialog package that defines this error is internal to Wails.
-	if dir == "" || err != nil && err.Error() == "cancelled by user" {
+	if err != nil && err.Error() == "cancelled by user" {
 		return Saved{}, nil
 	}
 	if err != nil {
 		return Saved{}, err
+	}
+	if dir == "" {
+		return Saved{}, nil
 	}
 	release, err := d.Busy.Acquire(busy.Transfer)
 	if err != nil {
@@ -73,6 +72,16 @@ func (d *DownloadService) SaveTrack(ctx context.Context, p SaveParams) (Saved, e
 		return Saved{}, err
 	}
 	return Saved{Path: path, Folder: dir}, nil
+}
+
+// startFolder is the remembered folder while it still exists, else the home folder: Wails'
+// dialog fails without opening when its start folder is gone.
+func startFolder(remembered string) string {
+	if fi, err := os.Stat(remembered); remembered != "" && err == nil && fi.IsDir() {
+		return remembered
+	}
+	home, _ := os.UserHomeDir()
+	return home
 }
 
 func save(r io.Reader, dir, name string) (string, error) {
