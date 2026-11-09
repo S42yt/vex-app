@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -159,5 +160,23 @@ func TestNoUpdate(t *testing.T) {
 	canary := &UpdateService{Busy: &busy.Registry{}}
 	if canary.Check(context.Background()).LatestVersion != "" || canary.Download() == nil {
 		t.Fatal("canary offered an update")
+	}
+}
+
+func TestSweepLeftovers(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "VexWave.exe")
+	for _, f := range []string{"VexWave.exe", "VexWave.exe.old.123", "uninstall.exe", "wails-update-42/VexWave-windows-amd64.exe"} {
+		os.MkdirAll(filepath.Dir(filepath.Join(dir, f)), 0o755)
+		os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644)
+	}
+	sweep(exe)
+	entries, _ := os.ReadDir(dir)
+	var left []string
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	if fmt.Sprint(left) != "[VexWave.exe uninstall.exe]" {
+		t.Fatalf("left %v", left)
 	}
 }

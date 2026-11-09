@@ -5,3 +5,4 @@ frontend/dist
 frontend/node_modules
 /preview/
 contract/node_modules
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe

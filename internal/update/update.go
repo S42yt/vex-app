@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/VexWave/vex-app/internal/busy"
@@ -57,7 +58,21 @@ type UpdateService struct {
 
 func (s *UpdateService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	s.ctx = ctx
+	if exe, err := os.Executable(); err == nil {
+		sweep(exe)
+	}
 	return nil
+}
+
+// sweep removes what Wails' updater leaves beside the exe: a staged download is only cleared by
+// the next download in the same run, and a swap renames the replaced exe aside because Windows
+// won't delete it while it's still mapped. SingleInstance has exited a second launch before this runs.
+func sweep(exe string) {
+	stale, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "wails-update-*"))
+	olds, _ := filepath.Glob(exe + ".old.*")
+	for _, p := range append(stale, olds...) {
+		os.RemoveAll(p)
+	}
 }
 
 type Available struct {
