@@ -1,7 +1,7 @@
 import type { ImportedArtist, StagedFile } from "@/api/types";
 import { blobToBase64 } from "@/lib/utils";
 import { artistService } from "./ArtistService";
-import { bun } from "./rpc";
+import { backend, failureOf } from "./rpc";
 import { libraryData } from "./LibraryData";
 import { libraryService } from "./LibraryService";
 import { mutate } from "./mutate";
@@ -59,18 +59,17 @@ export class UploadService extends Store<UploadState> {
 	}
 
 	async pick(): Promise<void> {
-		const result = await bun.pickTracks();
-		if (!result.ok) {
+		try {
+			this.add(await backend.Upload.Pick());
+		} catch (err) {
 			this.items.push({
 				id: crypto.randomUUID(),
 				title: "Add songs",
 				status: "error",
-				error: result.error,
+				error: failureOf(err).error,
 			});
 			this.emit();
-			return;
 		}
-		this.add(result.staged);
 	}
 
 	add(files: readonly StagedFile[], options: StageOptions = {}): void {
@@ -119,7 +118,7 @@ export class UploadService extends Store<UploadState> {
 	skip(stagedId: string): void {
 		if (!this.staged.some((s) => s.id === stagedId)) return;
 		this.staged = this.staged.filter((s) => s.id !== stagedId);
-		void bun.discardStaged({ ids: [stagedId] });
+		void backend.Upload.Discard([stagedId]);
 		this.reviewedCount += 1;
 		this.settleReviewedCount();
 		this.emit();
@@ -134,7 +133,7 @@ export class UploadService extends Store<UploadState> {
 
 	cancelAll(): void {
 		if (this.staged.length === 0) return;
-		void bun.discardStaged({ ids: this.staged.map((s) => s.id) });
+		void backend.Upload.Discard(this.staged.map((s) => s.id));
 		this.staged = [];
 		this.reviewedCount = 0;
 		this.emit();
@@ -166,13 +165,12 @@ export class UploadService extends Store<UploadState> {
 		const known = staged.playWhenReady ? libraryService.trackIds() : null;
 		const result = await mutate(
 			async () =>
-				bun.confirmUpload({
+				backend.Upload.Confirm({
 					stagedId: staged.id,
 					title: item.title,
 					artistIds,
 					coverBase64: coverBlob && (await blobToBase64(coverBlob)),
 				}),
-			"Upload failed",
 		);
 		if (!result.ok) {
 			item.status = "error";

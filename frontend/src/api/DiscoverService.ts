@@ -1,7 +1,7 @@
 import type { MediaSearchResult, SearchSource } from "@/api/types";
 import { storage } from "@/lib/storage";
 import { importService, parseImportUrl } from "./ImportService";
-import { bun } from "./rpc";
+import { backend, failureOf } from "./rpc";
 import { Store } from "@/lib/store";
 
 export interface DiscoverState {
@@ -35,22 +35,15 @@ export class DiscoverService extends Store<DiscoverState> {
 		const generation = ++this.generation;
 		this.update({ query: term, results: [], loading: true, error: null });
 		try {
-			const result = await bun.searchMedia({
+			const results = await backend.Search.Search({
 				query: term,
 				source: this.snapshot.source,
 			});
 			if (generation !== this.generation) return;
-			this.update(
-				result.ok
-					? { results: result.results, loading: false }
-					: { loading: false, error: result.error },
-			);
+			this.update({ results, loading: false });
 		} catch (err) {
 			if (generation !== this.generation) return;
-			this.update({
-				loading: false,
-				error: err instanceof Error ? err.message : "Search failed",
-			});
+			this.update({ loading: false, error: failureOf(err).error });
 		}
 	};
 

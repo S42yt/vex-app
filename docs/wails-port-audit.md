@@ -71,7 +71,7 @@ Why this layout:
 
 ### What carries over
 
-The Go side is new code. It starts from the sandbox packages (Ground rules 7) and the behaviour in the reference. The UI is not part of the port: the facade (§3.3) keeps its call sites, so it is copied and then changed as §4 lists.
+The Go side is new code. It starts from the sandbox packages (Ground rules 7) and the behaviour in the reference. The UI is not part of the port: it is copied and then changed as §4 lists.
 
 | From `main` | On the branch | Form |
 |---|---|---|
@@ -184,7 +184,7 @@ Line references into this repo are against `main` at `77faba4` (v0.6.1). On the 
    - `[]byte` as a base64 `string | null`;
    - a type with a custom `MarshalJSON` (needed for the contract's absent-vs-null rule) as `any`.
 
-   The frontend keeps hand-written types behind the facade. → §3.3
+   The frontend keeps hand-written types, stated once in `api/rpc.ts`. → §3.3
 
 ### Decisions this plan is built on
 
@@ -211,10 +211,10 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 |---|---|---|---|---|---|---|
 | App bootstrap & window | `src/bun/index.ts:186-202`, `electrobun.config.ts` | One 1200×800 window with RPC | `application.New(Options{Services…})` + `app.Window.NewWithOptions` | Same | low | test (`port-sandbox/app/main.go`) |
 | Dev server / HMR | `index.ts:14-31`, `package.json` scripts | Vite in dev, bundle otherwise | `wails3 dev` + `FRONTEND_DEVSERVER_URL`; `production` build tag; Taskfile `PACKAGE_MANAGER=bun` | Yes: no runtime probe of :5173, no build that ships stale `dist/` | low | src (`v3/internal/assetserver/build_dev.go:161`); `wails3 build` with bun: test. HMR: §7 |
-| RPC transport | `src/shared/rpcSchema.ts:260-315`, `api/rpc.ts`, `index.ts:125-184` | Typed request/response | Bound methods + generated TS; facade keeps `{ok}\|RpcFailure` | Yes: types generated from Go | med | test (`probe-bridge.ts`) |
+| RPC transport | `src/shared/rpcSchema.ts:260-315`, `api/rpc.ts`, `index.ts:125-184` | Typed request/response | Bound methods + generated TS, typed and grouped by Go service in `api/rpc.ts` (§3.3) | Yes: types generated from Go | med | test (`probe-bridge.ts`) |
 | RPC timeout | `maxRequestTime: 120_000` (`index.ts:127`, `rpc.ts:5`) | Electrobun's 1 s default | No call timeout; `ctx` cancelled by `promise.cancel()` | Yes | low | test: a 9 s call completed; `cancel()` → Go saw `context canceled` |
 | Pushed messages | `rpc.send.*` (5 kinds) | Progress, expiry, presence status | `application.RegisterEvent[T]` + `app.Event.Emit`; typed names in `bindings/events` | Same | low | test (`probe-bridge.ts`: typed events received) |
-| Error model | `RpcFailure` (`rpcSchema.ts:24-31`), `ApiClient.ts:425-487` | 401→login, 429 `Retry-After`, 413/407 text | Go error type; promise rejects with `RuntimeError`, `cause` = JSON of the error | Same, behind facade | low | test: `cause` = `{status, retryAfterSec, error}`; plain `errors.New` → `cause: {}` |
+| Error model | `RpcFailure` (`rpcSchema.ts:24-31`), `ApiClient.ts:425-487` | 401→login, 429 `Retry-After`, 413/407 text | Go error type; promise rejects with `RuntimeError`, `cause` = JSON of the error | Same: calls reject, `failureOf` reads the error | low | test: `cause` = `{status, retryAfterSec, error}`; plain `errors.New` → `cause: {}` |
 | Backend client | `ApiClient.ts`, `contract/contract.ts` | Typed backend calls | Hand-written `backend.Client` on `net/http` (13 routes) | Yes: one HTTP path | med | npm registry: every `@ts-rest/open-api` dist-tag peers `zod ^3` |
 | Payload limits mirror | `src/shared/limits.ts`, startup check `ApiClient.ts:39-46` | Refuse oversize payloads early | `limits_gen.go` and the frontend's `limits.gen.ts` generated from the contract with zod 4's `z.toJSONSchema` | Yes: build time, no hand mirror | low | test (`port-sandbox/limits/gen.ts` produced all 8 limits) |
 | Outbound proxy | `ApiClient.ts:48-78`, `ytDlp.ts:11-28` | User/corporate proxy | `httpproxy.Config{…}.ProxyFunc()` (honours `NO_PROXY`, bypasses loopback) | Same | low | test (`port-sandbox/gotests/netx`) |
@@ -376,9 +376,9 @@ The ≤ 40 ms duration differences are below the contract's resolution of intere
 - **No call timeout:** a 9.2 s call completed.
 - **Ordering:** a call's reply and an event emitted after it can reach the webview in either order (§3.7, status ordering).
 
-**Facade.** `api/rpc.ts` (`frontend/src/api/rpc.ts`) stays the only module that imports Wails. It re-exports `bun.*`, `onBunMessage` and `notifyBun` with today's signatures, and wraps each generated call in a `settle()` that resolves `{ok: true, …}` or maps `RuntimeError` to `RpcFailure` (`error: e.message`, `status: e.cause?.status`, `retryAfterSec: e.cause?.retryAfterSec`). Then none of the call sites in §4 change, and `mutate.ts` and the `Retry-After` handling (`SessionService.ts:168-172`) keep working.
+**Boundary.** `api/rpc.ts` (`frontend/src/api/rpc.ts`) stays the only module that imports Wails, and it follows Wails' own model instead of Electrobun's. It exports `backend`, the generated bindings grouped by Go service with the Go method names (`backend.Session.Login`, `backend.Library.GetLibrary`, …) and typed with the frontend's hand-written types. A call resolves with Go's return value and rejects with Go's error; `failureOf(e)` turns a rejection into `{error: e.message, status, retryAfterSec, downloadMissing}` from `e.cause`. Callers `try`/`catch`: `mutate.ts` does it for the mutations (and marks the session expired on a 401), and the `Retry-After` handling in `SessionService.ts` reads the same failure. The port first kept Electrobun's `bun.*` / `onBunMessage` / `notifyBun` signatures and its `{ok: true} | {ok: false}` results behind a `settle()` wrapper so that no call site changed; that layer is gone.
 
-**Pushed messages.** Tagged unions (`rpcSchema.ts:145-157,167-170,189-205`) become one registered event per variant (`binaries:progress`, `binaries:installed`, `binaries:finished`, `binaries:failed`, `import:progress`, `import:staged`, `import:failed`, `session:expired`, `presence:status`). Each gets an exact generated payload type, which the facade folds back into today's `onBunMessage` shapes.
+**Events.** Electrobun's tagged unions (`rpcSchema.ts:145-157,167-170,189-205`) are one registered event per variant (`binaries:progress`, `binaries:installed`, `binaries:finished`, `binaries:failed`, `import:progress`, `import:staged`, `import:failed`, `session:expired`, `presence:status`). `api/rpc.ts` exports their names as `Event`, together with the three `wails:updater:*` events, and `on(name, listener)`, which hands the listener the event's typed payload. Each service subscribes to its events one by one in its constructor.
 
 **Types.** Generated with `wails3 generate bindings -ts -i` (the template's own flags, `port-sandbox/app/build/Taskfile.yml:191`):
 
@@ -393,9 +393,9 @@ The ≤ 40 ms duration differences are below the contract's resolution of intere
 | `time.Time` | `string` | none used |
 
 Recommendation:
-- **Types:** keep the data types of `src/shared/rpcSchema.ts` as hand-written frontend types in `frontend/src/api/types.ts` (19 components and 2 `lib/` modules import them, e.g. `ArtistsView.tsx:24`, `lib/storage.ts:2`). The facade casts the generated results to them.
+- **Types:** keep the data types of `src/shared/rpcSchema.ts` as hand-written frontend types in `frontend/src/api/types.ts` (19 components and 2 `lib/` modules import them, e.g. `ArtistsView.tsx:24`, `lib/storage.ts:2`). `api/rpc.ts` states them for each call.
 - **Nil slices:** Go always builds slices non-nil. A Go test marshals every response type and fails on a JSON `null` array.
-- **Absent vs null** ("a null image removes it, an absent one leaves it", `contract.ts:44`): `Nullable[T]{Set, Null bool; V T}` with `UnmarshalJSON` + `MarshalJSON` + `IsZero`, tagged `omitzero`, works across the binding unchanged. In the running app, JS `{}`, `{coverBase64: null}` and `{coverBase64: "QUJD"}` arrived as absent, null and set, and were re-marshalled as `{"id":"a"}`, `{"id":"a","coverBase64":null}` and `{…,"coverBase64":"QUJD"}`. The facade's hand-written param types (`coverBase64?: string | null`, `rpcSchema.ts:70`) stay as they are.
+- **Absent vs null** ("a null image removes it, an absent one leaves it", `contract.ts:44`): `Nullable[T]{Set, Null bool; V T}` with `UnmarshalJSON` + `MarshalJSON` + `IsZero`, tagged `omitzero`, works across the binding unchanged. In the running app, JS `{}`, `{coverBase64: null}` and `{coverBase64: "QUJD"}` arrived as absent, null and set, and were re-marshalled as `{"id":"a"}`, `{"id":"a","coverBase64":null}` and `{…,"coverBase64":"QUJD"}`. The hand-written param types (`coverBase64?: string | null`, `rpcSchema.ts:70`) stay as they are.
 
 ### 3.4 Concurrency: one model per piece of shared state — **med**
 
@@ -466,7 +466,7 @@ Actor design and evidence in §3.4.
   - `windows.CreateFile(…, FILE_FLAG_OVERLAPPED)` + `os.NewFile` lets the write through, but Go's poller updates the file offset from `Read` and `Write` without a shared lock on a pipe (`internal/poll/fd_windows.go`, `addOffset`), so `go test -race` fails inside the standard library.
 
   `Close` from the actor releases the blocked `Read`, which disable and quit need. A missing pipe fails at once. A busy pipe counts as absent after 500 ms, and the sweep moves to the next index or the 10 s retry.
-- **Status ordering:** a `presence:status` event can reach the webview before the reply to an earlier `SetEnabled` call, which Electrobun's RPC never did. The fake Discord answers within a millisecond, so in the app the stale "offline" reply overwrote "connected". The actor numbers every status it hands out (`seq`), and the facade keeps the newest.
+- **Status ordering:** a `presence:status` event can reach the webview before the reply to an earlier `SetEnabled` call, which Electrobun's RPC never did. The fake Discord answers within a millisecond, so in the app the stale "offline" reply overwrote "connected". The actor numbers every status it hands out (`seq`), and `PresenceService` in the webview keeps the newest.
 - **Framing and helpers:** `binary.LittleEndian` frames written in one `Write`, `os.Getpid()`, `net/netip` for the routability check (`DiscordPresence.ts:384-415`), and rune-based `clampText` (`:417-422`).
 - **Live Discord** (handshake, nonce replies, activity refusal) is still to check (§7). The tests run a fake Discord on a real named pipe (`winio.ListenPipe`, at index 3 so the sweep is exercised), and the app was checked end to end against one on `discord-ipc-0`: Settings shows Connected, playing sends SET_ACTIVITY, and switching it off closes the pipe.
 
@@ -508,7 +508,7 @@ The login stays in `localStorage` (`storage.ts:75-79`) and is pushed to Go with 
 
 **What changes.**
 - **Releases** publish the bare app exe plus `SHA256SUMS`, next to the NSIS installer for first installs. The GitHub provider reads only `ChecksumAsset`, not GitHub's per-asset `digest` (`wails:v3/pkg/updater/providers/github/github.go:167-178`).
-- **Frontend:** keeps `AppUpdateBanner` and `AppUpdateService` with its own phases. The facade maps three of the updater's events onto `appUpdateProgress`: `wails:updater:download-progress` (`written`/`total`), `update-ready`, and `error` except at the `check` stage, since a failed check means no banner. A failed download shows the updater's own message (for example `updater: digest mismatch`).
+- **Frontend:** keeps `AppUpdateBanner` and `AppUpdateService` with its own phases. It listens to three of the updater's events while downloading: `wails:updater:download-progress` (`written`/`total`), `update-ready`, and `error` except at the `check` stage, since a failed check means no banner. A failed download shows the updater's own message (for example `updater: digest mismatch`).
 - **`internal/update`** wraps `app.Updater` (`update_test.go` runs it against a fake GitHub):
   - `Configure` sets up the GitHub provider; its `HTTPClient` sends each request through `netx.For(proxy)`'s stream transport, so a proxy change applies to the next request and a release asset keeps its `Content-Length`.
   - `Check` reports the newer version; any failure reads as no update, as `AppUpdater.ts:38-49` does.
@@ -622,9 +622,9 @@ A direct port, except for where the binaries live.
 
 The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths below are relative to those folders, and line numbers are `main`'s.
 
-**`api/rpc.ts` is the only file that imports Wails.** It re-exports `bun`, `onBunMessage` and `notifyBun` with today's signatures, built on the generated bindings, `Events.On` and `settle()` (§3.3).
+**`api/rpc.ts` is the only file that imports Wails.** It exports `backend` (the bindings by Go service), `failureOf`, `Event` and `on` (§3.3). The tables below list the call sites by their Electrobun names, as the port found them; each now calls the Go method of the same purpose.
 
-### RPC call sites (unchanged behind the facade)
+### RPC call sites
 
 | Service | Calls (`file:line`) |
 |---|---|
@@ -647,14 +647,14 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 | Listener | Becomes |
 |---|---|
 | `SessionService.ts:176` `sessionExpired` | `session:expired` |
-| `BinaryService.ts:225` `binaryProgress` | four `binaries:*` events; the facade can fold them back into today's message |
+| `BinaryService.ts:225` `binaryProgress` | four `binaries:*` events, each with its own handler |
 | `ImportService.ts:187` `urlImportProgress` | `import:progress` / `import:staged` / `import:failed`; the `finished` variant becomes `staged`, carrying the staged file, and its `stage()` (:143-167) goes away |
 | `AppUpdateService.ts:125` `appUpdateProgress` | `wails:updater:download-progress`, `update-ready`, `error` |
 | `PresenceService.ts:110` `presenceStatus` | `presence:status` |
 
 ### Files that change
 
-- **`api/rpc.ts`** (`:1-16`): rewritten as the facade.
+- **`api/rpc.ts`** (`:1-16`): rewritten as the typed boundary to the bindings (§3.3).
 - **`api/UploadService.ts`**:
   - staging comes from Go (`Uploads.Pick()`, `import:staged` from imports) instead of `File` objects;
   - `parseBlob` (`:1,109`), the MIME filter (`:93-95`) and the base64 encode of audio (`:219`) go;
@@ -667,7 +667,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 - **`components/UploadReviewDialog.tsx:82`**: the staged cover comes from a loopback URL instead of `URL.createObjectURL(coverBlob)`. The replacement-cover picker (`:170-172`) stays a browser `File`.
 - **`App.tsx:44-50,67-74,110`**: the drop handlers and the `isDragging` overlay are deleted (§5).
 - **`lib/devicePixelRatio.ts:1-5,22`**: the CEF `resize` trigger can go.
-- **Types:** the data types of `src/shared/rpcSchema.ts` move to `api/types.ts` as the frontend's hand-written types (§3.3). Its `PlayerRPC` schema (`:260-315`) is replaced by the facade.
+- **Types:** the data types of `src/shared/rpcSchema.ts` move to `api/types.ts` as the frontend's hand-written types (§3.3). Its `PlayerRPC` schema (`:260-315`) is replaced by the `Backend` interface in `api/rpc.ts`, and its result envelopes and tagged messages by plain return values and per-event payloads.
 - **Imports of `src/shared/`:** the 34 `../../shared/rpcSchema` and 7 `../../shared/limits` imports become `@/api/types` and `@/lib/limits`.
 - **Build wiring** (the template's, Port setup):
   - `main.go` embeds `frontend/dist` (`//go:embed all:frontend/dist`, as in `port-sandbox/app/main.go`);

@@ -1,8 +1,12 @@
 import { playerController } from "@/player/PlayerController";
 import { storage } from "@/lib/storage";
 import type { PlayerState } from "@/player/types";
-import type { PresenceStatus, PresenceTrack } from "@/api/types";
-import { bun, notifyBun, onBunMessage } from "./rpc";
+import type {
+	NumberedPresenceStatus,
+	PresenceStatus,
+	PresenceTrack,
+} from "@/api/types";
+import { backend, Event, on } from "./rpc";
 import { Store } from "@/lib/store";
 
 const DRIFT_TOLERANCE_SEC = 2;
@@ -19,6 +23,12 @@ export class PresenceService extends Store<PresenceState> {
 	};
 	private sent: PresenceTrack | null = null;
 	private sentAt = 0;
+	private seq = -1;
+
+	constructor() {
+		super();
+		on(Event.PresenceStatus, (status) => this.take(status));
+	}
 
 	start(): void {
 		void this.announce(this.snapshot.enabled);
@@ -39,17 +49,20 @@ export class PresenceService extends Store<PresenceState> {
 		if (enabled) this.publishNow();
 	};
 
-	handleStatus(status: PresenceStatus): void {
-		this.update({ status });
-	}
-
 	private async announce(enabled: boolean): Promise<void> {
 		try {
-			this.update({ status: await bun.setPresenceEnabled({ enabled }) });
+			this.take(await backend.Presence.SetEnabled({ enabled }));
 		} catch (err) {
 			this.update({ status: { connection: "offline" } });
-			console.error("Discord presence: bun never took the setting.", err);
+			console.error("Discord presence: Go never took the setting.", err);
 		}
+	}
+
+	// A status event can overtake the reply to an earlier SetEnabled; the newest number wins.
+	private take({ seq, ...status }: NumberedPresenceStatus): void {
+		if (seq <= this.seq) return;
+		this.seq = seq;
+		this.update({ status });
 	}
 
 	private publishNow(): void {
@@ -60,7 +73,7 @@ export class PresenceService extends Store<PresenceState> {
 	private push(next: PresenceTrack | null): void {
 		this.sent = next;
 		this.sentAt = Date.now();
-		notifyBun.presenceChanged({ track: next });
+		void backend.Presence.SetNowPlaying({ track: next }).catch(() => {});
 	}
 
 	private hasChanged(next: PresenceTrack | null): boolean {
@@ -94,7 +107,3 @@ function presenceFor(state: PlayerState): PresenceTrack | null {
 }
 
 export const presenceService = new PresenceService();
-
-onBunMessage("presenceStatus", (status) => {
-	presenceService.handleStatus(status);
-});

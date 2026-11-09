@@ -1,9 +1,9 @@
 import type {
 	BinaryInstallStep,
 	BinaryName,
-	BinaryProgressMessage,
+	BinaryProgress,
 } from "@/api/types";
-import { bun, onBunMessage } from "./rpc";
+import { backend, Event, failureOf, on } from "./rpc";
 import { Store } from "@/lib/store";
 
 export type BinaryPhase =
@@ -51,25 +51,26 @@ export class BinaryService extends Store<BinariesState> {
 	};
 	private updateCheckDone = false;
 
+	constructor() {
+		super();
+		on(Event.BinariesProgress, (progress) => this.onProgress(progress));
+		on(Event.BinariesInstalled, ({ binary }) => this.onInstalled(binary));
+		on(Event.BinariesFinished, () => this.onFinished());
+		on(Event.BinariesFailed, ({ error }) => this.onFailed(error));
+	}
+
 	async refreshStatus(): Promise<void> {
-		let result;
+		let status;
 		try {
-			result = await bun.getBinaryStatus();
+			status = await backend.Binaries.GetBinaryStatus();
 		} catch (err) {
-			this.update({
-				phase: "error",
-				error: err instanceof Error ? err.message : "Binary check failed",
-			});
+			this.update({ phase: "error", error: failureOf(err).error });
 			return;
 		}
-		if (!result.ok) {
-			this.update({ phase: "error", error: result.error });
-			return;
-		}
-		if (result.missing.length === 0) {
+		if (status.missing.length === 0) {
 			this.update({ phase: "ready", missing: [], progress: {}, error: null });
 		} else {
-			this.update({ phase: "missing", missing: result.missing, error: null });
+			this.update({ phase: "missing", missing: status.missing, error: null });
 		}
 	}
 
@@ -89,15 +90,11 @@ export class BinaryService extends Store<BinariesState> {
 		}
 		this.update({ phase: "installing", progress, error: null });
 		try {
-			const result = await bun.installMissingBinaries({
+			await backend.Binaries.InstallMissingBinaries({
 				proxyUrl: proxyUrl || undefined,
 			});
-			if (!result.ok) this.update({ phase: "error", error: result.error });
 		} catch (err) {
-			this.update({
-				phase: "error",
-				error: err instanceof Error ? err.message : "Install failed to start",
-			});
+			this.update({ phase: "error", error: failureOf(err).error });
 		}
 	}
 
@@ -110,13 +107,9 @@ export class BinaryService extends Store<BinariesState> {
 		if (this.snapshot.updating) return;
 		this.update({ updating: true, updateError: null, updateProgress: null });
 		try {
-			const result = await bun.updateYtDlp();
-			if (!result.ok) this.update({ updating: false, updateError: result.error });
+			await backend.Binaries.UpdateYtDlp();
 		} catch (err) {
-			this.update({
-				updating: false,
-				updateError: err instanceof Error ? err.message : "Update failed to start",
-			});
+			this.update({ updating: false, updateError: failureOf(err).error });
 		}
 	}
 
@@ -124,7 +117,7 @@ export class BinaryService extends Store<BinariesState> {
 		if (this.updateCheckDone) return;
 		this.updateCheckDone = true;
 		try {
-			const result = await bun.checkYtDlpUpdate();
+			const result = await backend.Binaries.CheckYtDlpUpdate();
 			if (result.updateAvailable) {
 				this.update({
 					updateAvailable: true,
@@ -139,79 +132,56 @@ export class BinaryService extends Store<BinariesState> {
 		this.update({ updateDismissed: true });
 	}
 
-	handleProgress(msg: BinaryProgressMessage): void {
-		if (this.snapshot.phase === "installing") {
-			switch (msg.type) {
-				case "progress":
-					this.update({
-						progress: {
-							...this.snapshot.progress,
-							[msg.binary]: {
-								step: msg.step,
-								receivedBytes: msg.receivedBytes,
-								totalBytes: msg.totalBytes ?? null,
-								part: msg.part,
-								partCount: msg.partCount,
-								done: false,
-							},
-						},
-					});
-					break;
-				case "binaryInstalled": {
-					const existing = this.snapshot.progress[msg.binary];
-					if (!existing) break;
-					this.update({
-						progress: {
-							...this.snapshot.progress,
-							[msg.binary]: { ...existing, done: true },
-						},
-					});
-					break;
-				}
-				case "finished":
-					void this.refreshStatus();
-					break;
-				case "failed":
-					this.update({ phase: "error", error: msg.error });
-					break;
-			}
-			return;
+	// While the first install runs, events are about it; afterwards they are a yt-dlp update's.
+	private get installing(): boolean {
+		return this.snapshot.phase === "installing";
+	}
+
+	private onProgress({ binary, ...progress }: BinaryProgress): void {
+		const info: BinaryProgressInfo = {
+			...progress,
+			totalBytes: progress.totalBytes ?? null,
+			done: false,
+		};
+		if (this.installing) {
+			this.update({ progress: { ...this.snapshot.progress, [binary]: info } });
+		} else {
+			this.update({ updateProgress: info });
 		}
-		switch (msg.type) {
-			case "progress":
-				this.update({
-					updateProgress: {
-						step: msg.step,
-						receivedBytes: msg.receivedBytes,
-						totalBytes: msg.totalBytes ?? null,
-						part: msg.part,
-						partCount: msg.partCount,
-						done: false,
-					},
-				});
-				break;
-			case "finished":
-				this.update({
-					updating: false,
-					updateAvailable: false,
-					updateProgress: null,
-				});
-				break;
-			case "failed":
-				this.update({
-					updating: false,
-					updateProgress: null,
-					updateError: msg.error,
-				});
-				break;
+	}
+
+	private onInstalled(binary: BinaryName): void {
+		const existing = this.snapshot.progress[binary];
+		if (!this.installing || !existing) return;
+		this.update({
+			progress: {
+				...this.snapshot.progress,
+				[binary]: { ...existing, done: true },
+			},
+		});
+	}
+
+	private onFinished(): void {
+		if (this.installing) {
+			void this.refreshStatus();
+		} else {
+			this.update({
+				updating: false,
+				updateAvailable: false,
+				updateProgress: null,
+			});
+		}
+	}
+
+	private onFailed(error: string): void {
+		if (this.installing) {
+			this.update({ phase: "error", error });
+		} else {
+			this.update({ updating: false, updateProgress: null, updateError: error });
 		}
 	}
 }
 
 export const binaryService = new BinaryService();
-
-onBunMessage("binaryProgress", (msg) => {
-	binaryService.handleProgress(msg);
-});
 
 void binaryService.refreshStatus();

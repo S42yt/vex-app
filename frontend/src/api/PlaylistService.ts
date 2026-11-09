@@ -12,7 +12,7 @@ import type { LibraryDataState } from "./LibraryData";
 import { libraryService } from "./LibraryService";
 import { mutate } from "./mutate";
 import type { MutationResult } from "./mutate";
-import { bun } from "./rpc";
+import { backend } from "./rpc";
 import { sessionService } from "./SessionService";
 
 export function playlistQueueContext(playlistId: number): string {
@@ -111,19 +111,13 @@ export class PlaylistService extends LibraryView<PlaylistsState> {
 	}
 
 	async create(input: CreatePlaylistParams): Promise<MutationResult> {
-		const result = await mutate(
-			() => bun.createPlaylist(input),
-			"Creating the playlist failed",
-		);
+		const result = await mutate(() => backend.Library.CreatePlaylist(input));
 		if (result.ok) await libraryData.refresh();
 		return result;
 	}
 
 	async edit(input: EditPlaylistParams): Promise<MutationResult> {
-		const result = await mutate(
-			() => bun.editPlaylist(input),
-			"Editing the playlist failed",
-		);
+		const result = await mutate(() => backend.Library.EditPlaylist(input));
 		if (result.ok) await libraryData.refresh();
 		return result;
 	}
@@ -219,10 +213,7 @@ export class PlaylistService extends LibraryView<PlaylistsState> {
 	}
 
 	async remove(id: number): Promise<void> {
-		const result = await mutate(
-			() => bun.deletePlaylist({ id }),
-			"Deleting the playlist failed",
-		);
+		const result = await mutate(() => backend.Library.DeletePlaylist({ id }));
 		if (result.ok) void libraryData.refresh();
 		else this.fail(result.error);
 	}

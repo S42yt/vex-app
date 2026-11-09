@@ -1,4 +1,4 @@
-import { bun } from "./rpc";
+import { backend, failureOf } from "./rpc";
 import { Store } from "@/lib/store";
 
 export interface UninstallState {
@@ -19,7 +19,7 @@ export class UninstallService extends Store<UninstallState> {
 		if (this.checking || this.snapshot.removable !== null) return;
 		this.checking = true;
 		try {
-			const { removable } = await bun.canUninstall();
+			const { removable } = await backend.Uninstall.Removable();
 			this.update({ removable });
 		} catch {
 			this.update({ removable: false });
@@ -32,14 +32,9 @@ export class UninstallService extends Store<UninstallState> {
 		if (this.snapshot.running) return;
 		this.update({ running: true, error: null });
 		try {
-			const result = await bun.uninstallApp();
-			if (!result.ok) this.update({ running: false, error: result.error });
+			await backend.Uninstall.Start();
 		} catch (err) {
-			this.update({
-				running: false,
-				error:
-					err instanceof Error ? err.message : "The uninstall never started",
-			});
+			this.update({ running: false, error: failureOf(err).error });
 		}
 	};
 }

@@ -1,5 +1,5 @@
 import type { RemoteLibrary } from "@/api/types";
-import { bun } from "./rpc";
+import { backend, failureOf } from "./rpc";
 import { sessionService } from "./SessionService";
 import { Store } from "@/lib/store";
 
@@ -41,24 +41,15 @@ export class LibraryData extends Store<LibraryDataState> {
 		this.update({ loading: true, error: null });
 		let result;
 		try {
-			result = await bun.getLibrary();
+			result = await backend.Library.GetLibrary();
 		} catch (err) {
 			if (seq !== this.fetchSeq) return true;
-			this.update({
-				loading: false,
-				error:
-					err instanceof Error ? err.message : "Failed to load the library",
-			});
+			const failure = failureOf(err);
+			if (failure.status === 401) sessionService.markExpired();
+			this.update({ loading: false, error: failure.error });
 			return false;
 		}
 		if (seq !== this.fetchSeq) return true;
-		if (!result.ok) {
-			if (result.status === 401) {
-				sessionService.markExpired();
-			}
-			this.update({ loading: false, error: result.error });
-			return false;
-		}
 		this.update({
 			tracks: result.tracks,
 			artists: result.artists,

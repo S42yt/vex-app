@@ -13,7 +13,7 @@ import type { LibraryDataState } from "./LibraryData";
 import { libraryService } from "./LibraryService";
 import { mutate } from "./mutate";
 import type { MutationResult } from "./mutate";
-import { bun } from "./rpc";
+import { backend } from "./rpc";
 
 export function artistQueueContext(artistId: number): string {
 	return `artist-${artistId}`;
@@ -71,10 +71,7 @@ export class ArtistService extends LibraryView<ArtistsState> {
 	}
 
 	async create(input: CreateArtistParams): Promise<MutationResult> {
-		const result = await mutate(
-			() => bun.createArtist(input),
-			"Creating the artist failed",
-		);
+		const result = await mutate(() => backend.Library.CreateArtist(input));
 		if (result.ok) await libraryData.refresh();
 		return result;
 	}
@@ -101,10 +98,7 @@ export class ArtistService extends LibraryView<ArtistsState> {
 	}
 
 	async edit(input: EditArtistParams): Promise<MutationResult> {
-		const result = await mutate(
-			() => bun.editArtist(input),
-			"Editing the artist failed",
-		);
+		const result = await mutate(() => backend.Library.EditArtist(input));
 		if (result.ok) void libraryData.refresh();
 		return result;
 	}
@@ -128,10 +122,7 @@ export class ArtistService extends LibraryView<ArtistsState> {
 	}
 
 	async remove(id: number): Promise<void> {
-		const result = await mutate(
-			() => bun.deleteArtist({ id }),
-			"Deleting the artist failed",
-		);
+		const result = await mutate(() => backend.Library.DeleteArtist({ id }));
 		if (result.ok) void libraryData.refresh();
 		else this.fail(result.error);
 	}

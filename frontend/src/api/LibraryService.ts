@@ -5,7 +5,7 @@ import { LibraryView, libraryData } from "./LibraryData";
 import type { LibraryDataState } from "./LibraryData";
 import { mutate } from "./mutate";
 import type { MutationResult } from "./mutate";
-import { bun } from "./rpc";
+import { backend } from "./rpc";
 import { sessionService } from "./SessionService";
 
 export const LIBRARY_QUEUE_CONTEXT = "library";
@@ -117,10 +117,7 @@ export class LibraryService extends LibraryView<LibraryState> {
 	async removeTrack(trackId: string): Promise<void> {
 		const remote = this.remoteById.get(trackId);
 		if (!remote) return;
-		const result = await mutate(
-			() => bun.deleteTrack({ id: remote.id }),
-			"Deleting the track failed",
-		);
+		const result = await mutate(() => backend.Library.DeleteTrack({ id: remote.id }));
 		if (result.ok) void libraryData.refresh();
 		else this.fail(result.error);
 	}
@@ -133,10 +130,7 @@ export class LibraryService extends LibraryView<LibraryState> {
 		if (!remote) {
 			return { ok: false, error: "Only server tracks can be edited." };
 		}
-		const result = await mutate(
-			() => bun.editTrack({ id: remote.id, ...changes }),
-			"Editing the track failed",
-		);
+		const result = await mutate(() => backend.Library.EditTrack({ id: remote.id, ...changes }));
 		if (result.ok) void libraryData.refresh();
 		return result;
 	}

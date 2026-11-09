@@ -1,6 +1,6 @@
-import type { UrlImportProgressMessage } from "@/api/types";
+import type { ImportProgress, ImportStaged } from "@/api/types";
 import { formatMb } from "@/lib/utils";
-import { bun, onBunMessage } from "./rpc";
+import { backend, Event, failureOf, on } from "./rpc";
 import { uploadService } from "./UploadService";
 import { Store } from "@/lib/store";
 
@@ -75,6 +75,13 @@ export class ImportService extends Store<ImportsState> {
 	private jobs: ImportJob[] = [];
 	protected snapshot: ImportsState = { imports: [] };
 
+	constructor() {
+		super();
+		on(Event.ImportProgress, (progress) => this.onProgress(progress));
+		on(Event.ImportStaged, (ready) => this.onStaged(ready));
+		on(Event.ImportFailed, ({ importId, error }) => this.fail(importId, error));
+	}
+
 	jobFor(url: string): ImportJob | null {
 		return this.jobs.find((job) => job.url === url) ?? null;
 	}
@@ -95,13 +102,9 @@ export class ImportService extends Store<ImportsState> {
 		];
 		this.emit();
 		try {
-			const result = await bun.importFromUrl({ importId: job.id, url });
-			if (!result.ok) this.fail(job.id, result.error);
+			await backend.Importer.Start({ importId: job.id, url });
 		} catch (err) {
-			this.fail(
-				job.id,
-				err instanceof Error ? err.message : "Import failed to start",
-			);
+			this.fail(job.id, failureOf(err).error);
 		}
 	}
 
@@ -110,32 +113,26 @@ export class ImportService extends Store<ImportsState> {
 		this.emit();
 	}
 
-	handleProgress(msg: UrlImportProgressMessage): void {
-		switch (msg.type) {
-			case "progress":
-				this.patch(msg.importId, (job) => ({
-					...job,
-					step: msg.step,
-					title: msg.title ?? job.title,
-					receivedBytes: msg.receivedBytes ?? job.receivedBytes,
-					totalBytes: msg.totalBytes ?? job.totalBytes,
-				}));
-				break;
-			case "staged":
-				if (!this.jobs.some((job) => job.id === msg.importId)) {
-					void bun.discardStaged({ ids: [msg.staged.id] });
-					break;
-				}
-				uploadService.add([msg.staged], {
-					suggestedArtist: msg.artist,
-					playWhenReady: true,
-				});
-				this.dismiss(msg.importId);
-				break;
-			case "failed":
-				this.fail(msg.importId, msg.error);
-				break;
+	private onProgress({ importId, ...progress }: ImportProgress): void {
+		this.patch(importId, (job) => ({
+			...job,
+			step: progress.step,
+			title: progress.title ?? job.title,
+			receivedBytes: progress.receivedBytes ?? job.receivedBytes,
+			totalBytes: progress.totalBytes ?? job.totalBytes,
+		}));
+	}
+
+	private onStaged({ importId, staged, artist }: ImportStaged): void {
+		if (!this.jobs.some((job) => job.id === importId)) {
+			void backend.Upload.Discard([staged.id]);
+			return;
 		}
+		uploadService.add([staged], {
+			suggestedArtist: artist,
+			playWhenReady: true,
+		});
+		this.dismiss(importId);
 	}
 
 	private fail(jobId: string, error: string): void {
@@ -154,7 +151,3 @@ export class ImportService extends Store<ImportsState> {
 }
 
 export const importService = new ImportService();
-
-onBunMessage("urlImportProgress", (msg) => {
-	importService.handleProgress(msg);
-});

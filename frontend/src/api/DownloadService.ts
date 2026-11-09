@@ -1,6 +1,6 @@
 import { storage } from "@/lib/storage";
 import type { Track } from "@/player/types";
-import { bun } from "./rpc";
+import { backend, failureOf } from "./rpc";
 import { Store } from "@/lib/store";
 
 export interface DownloadState {
@@ -20,20 +20,19 @@ export class DownloadService extends Store<DownloadState> {
 		let message: string | null = null;
 		let done: DownloadState["done"] = null;
 		try {
-			const result = await bun.downloadTrack({
+			const saved = await backend.Download.SaveTrack({
 				id: track.id,
 				fileName: track.artist
 					? `${track.artist} - ${track.title}`
 					: track.title,
 				startingFolder: storage.downloads.folder.get() ?? undefined,
 			});
-			if (!result.ok) message = result.error;
-			else if (result.path) {
-				done = { trackId: track.id, path: result.path };
-				if (result.folder) storage.downloads.folder.set(result.folder);
+			if (saved.path) {
+				done = { trackId: track.id, path: saved.path };
+				if (saved.folder) storage.downloads.folder.set(saved.folder);
 			}
 		} catch (err) {
-			message = err instanceof Error ? err.message : "The download failed.";
+			message = failureOf(err).error;
 		}
 		const standing = this.snapshot.error;
 		this.update({

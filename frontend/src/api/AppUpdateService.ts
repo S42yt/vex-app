@@ -1,9 +1,5 @@
-import type {
-	AppUpdateProgressMessage,
-	InstallAppUpdateResult,
-} from "@/api/types";
 import { mutate } from "./mutate";
-import { bun, onBunMessage } from "./rpc";
+import { backend, Event, failureOf, on } from "./rpc";
 import { Store } from "@/lib/store";
 
 type AppUpdatePhase = "idle" | "downloading" | "ready" | "installing";
@@ -28,11 +24,32 @@ export class AppUpdateService extends Store<AppUpdateState> {
 	};
 	private checkDone = false;
 
+	constructor() {
+		super();
+		on(Event.UpdateProgress, ({ written, total }) => {
+			if (this.downloading) {
+				this.update({ receivedBytes: written, totalBytes: total > 0 ? total : null });
+			}
+		});
+		on(Event.UpdateReady, () => {
+			if (this.downloading) this.update({ phase: "ready" });
+		});
+		on(Event.UpdateError, ({ stage, message }) => {
+			if (this.downloading && stage !== "check") {
+				this.update({ phase: "idle", error: message });
+			}
+		});
+	}
+
+	private get downloading(): boolean {
+		return this.snapshot.phase === "downloading";
+	}
+
 	async checkForUpdate(): Promise<void> {
 		if (this.checkDone) return;
 		this.checkDone = true;
 		try {
-			const { latestVersion } = await bun.checkAppUpdate();
+			const { latestVersion } = await backend.Update.Check();
 			if (latestVersion) this.update({ latestVersion });
 		} catch {
 		}
@@ -46,30 +63,22 @@ export class AppUpdateService extends Store<AppUpdateState> {
 			totalBytes: null,
 			error: null,
 		});
-		const result = await mutate(
-			() => bun.downloadAppUpdate(),
-			"Update failed to start",
-		);
+		const result = await mutate(() => backend.Update.Download());
 		if (!result.ok) this.update({ phase: "idle", error: result.error });
 	}
 
 	async install(): Promise<void> {
 		if (this.snapshot.phase !== "ready") return;
 		this.update({ phase: "installing", error: null });
-		let result: InstallAppUpdateResult;
 		try {
-			result = await bun.installAppUpdate();
+			await backend.Update.Install();
 		} catch (err) {
-			result = {
-				ok: false,
-				error: err instanceof Error ? err.message : "Update failed to start",
-			};
+			const failure = failureOf(err);
+			this.update({
+				phase: failure.downloadMissing ? "idle" : "ready",
+				error: failure.error,
+			});
 		}
-		if (result.ok) return;
-		this.update({
-			phase: "downloadMissing" in result ? "idle" : "ready",
-			error: result.error,
-		});
 	}
 
 	retry(): Promise<void> {
@@ -80,27 +89,6 @@ export class AppUpdateService extends Store<AppUpdateState> {
 		this.update({ dismissed: true });
 	}
 
-	handleProgress(msg: AppUpdateProgressMessage): void {
-		if (this.snapshot.phase !== "downloading") return;
-		switch (msg.type) {
-			case "progress":
-				this.update({
-					receivedBytes: msg.receivedBytes,
-					totalBytes: msg.totalBytes ?? null,
-				});
-				break;
-			case "ready":
-				this.update({ phase: "ready" });
-				break;
-			case "failed":
-				this.update({ phase: "idle", error: msg.error });
-				break;
-		}
-	}
 }
 
 export const appUpdateService = new AppUpdateService();
-
-onBunMessage("appUpdateProgress", (msg) => {
-	appUpdateService.handleProgress(msg);
-});

@@ -1,6 +1,6 @@
 import { storage } from "@/lib/storage";
-import type { RpcFailure } from "@/api/types";
-import { bun, onBunMessage } from "./rpc";
+import type { Failure } from "@/api/types";
+import { backend, Event, failureOf, on } from "./rpc";
 import { Store } from "@/lib/store";
 
 export type SessionStatus = "loggedOut" | "loggingIn" | "loggedIn";
@@ -40,19 +40,16 @@ export class SessionService extends Store<SessionState> {
 
 	private async restore(baseUrl: string, token: string): Promise<void> {
 		try {
-			const result = await bun.restoreSession({
+			await backend.Session.RestoreSession({
 				baseUrl,
 				token,
 				proxyUrl: this.snapshot.proxyUrl || undefined,
 			});
-			if (result.ok) {
-				this.update({ status: "loggedIn", restoring: false });
-				return;
-			}
+			this.update({ status: "loggedIn", restoring: false });
 		} catch {
+			this.clearStoredToken();
+			this.update({ status: "loggedOut", restoring: false });
 		}
-		this.clearStoredToken();
-		this.update({ status: "loggedOut", restoring: false });
 	}
 
 	async login(
@@ -66,38 +63,32 @@ export class SessionService extends Store<SessionState> {
 			return;
 		}
 		this.update({ status: "loggingIn", error: null, retryAfter: null });
-		let result;
+		let token;
 		try {
-			result = await bun.login({
+			token = await backend.Session.Login({
 				baseUrl,
 				username,
 				password,
 				proxyUrl: proxyUrl || undefined,
 			});
 		} catch (err) {
+			const failure = failureOf(err);
 			this.update({
 				status: "loggedOut",
-				error: err instanceof Error ? err.message : "Login request failed",
+				error: failure.error,
+				retryAfter: retryDeadline(failure),
 			});
 			return;
 		}
-		if (result.ok) {
-			storage.session.url.set(baseUrl);
-			storage.session.token.set(result.token);
-			this.storeProxy(proxyUrl);
-			this.update({
-				status: "loggedIn",
-				lastServerUrl: baseUrl,
-				proxyUrl,
-				proxyError: null,
-			});
-		} else {
-			this.update({
-				status: "loggedOut",
-				error: result.error,
-				retryAfter: retryDeadline(result),
-			});
-		}
+		storage.session.url.set(baseUrl);
+		storage.session.token.set(token);
+		this.storeProxy(proxyUrl);
+		this.update({
+			status: "loggedIn",
+			lastServerUrl: baseUrl,
+			proxyUrl,
+			proxyError: null,
+		});
 	}
 
 	async setProxy(proxyUrl: string): Promise<void> {
@@ -105,35 +96,29 @@ export class SessionService extends Store<SessionState> {
 		if (savingProxy) return;
 		if (proxyRetryAfter !== null && Date.now() < proxyRetryAfter) return;
 		this.update({ savingProxy: true, proxyError: null, proxyRetryAfter: null });
-		let result;
 		try {
-			result = await bun.setProxy({ proxyUrl: proxyUrl || undefined });
+			await backend.Session.SetProxy({ proxyUrl: proxyUrl || undefined });
 		} catch (err) {
-			this.update({
-				savingProxy: false,
-				proxyError: err instanceof Error ? err.message : "Saving the proxy failed",
-			});
+			const failure = failureOf(err);
+			this.update({ savingProxy: false });
+			if (failure.status === 401) {
+				this.markExpired();
+			} else {
+				this.update({
+					proxyError: failure.error,
+					proxyRetryAfter: retryDeadline(failure),
+				});
+			}
 			return;
 		}
-		if (result.ok) {
-			this.storeProxy(proxyUrl);
-			this.update({ savingProxy: false, proxyUrl });
-		} else if (result.status === 401) {
-			this.update({ savingProxy: false });
-			this.markExpired();
-		} else {
-			this.update({
-				savingProxy: false,
-				proxyError: result.error,
-				proxyRetryAfter: retryDeadline(result),
-			});
-		}
+		this.storeProxy(proxyUrl);
+		this.update({ savingProxy: false, proxyUrl });
 	}
 
 	async logout(): Promise<void> {
 		this.clearStoredToken();
 		try {
-			await bun.logout();
+			await backend.Session.Logout();
 		} catch {
 		}
 		this.update({ status: "loggedOut", error: null });
@@ -164,7 +149,7 @@ export class SessionService extends Store<SessionState> {
 	}
 }
 
-function retryDeadline(failure: RpcFailure): number | null {
+function retryDeadline(failure: Failure): number | null {
 	return failure.retryAfterSec === undefined
 		? null
 		: Date.now() + failure.retryAfterSec * 1000;
@@ -172,6 +157,6 @@ function retryDeadline(failure: RpcFailure): number | null {
 
 export const sessionService = new SessionService();
 
-onBunMessage("sessionExpired", ({ reason }) => {
+on(Event.SessionExpired, ({ reason }) => {
 	sessionService.markExpired(reason);
 });
