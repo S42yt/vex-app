@@ -1,7 +1,4 @@
-import type {
-	ImportedArtist,
-	UrlImportProgressMessage,
-} from "@/api/types";
+import type { UrlImportProgressMessage } from "@/api/types";
 import { formatMb } from "@/lib/utils";
 import { bun, onBunMessage } from "./rpc";
 import { uploadService } from "./UploadService";
@@ -131,38 +128,20 @@ export class ImportService {
 					totalBytes: msg.totalBytes ?? job.totalBytes,
 				}));
 				break;
-			case "finished":
-				void this.stage(msg.importId, msg.fileName, msg.fileUrl, msg.artist);
+			case "staged":
+				if (!this.jobs.some((job) => job.id === msg.importId)) {
+					void bun.discardStaged({ ids: [msg.staged.id] });
+					break;
+				}
+				uploadService.add([msg.staged], {
+					suggestedArtist: msg.artist,
+					playWhenReady: true,
+				});
+				this.dismiss(msg.importId);
 				break;
 			case "failed":
 				this.fail(msg.importId, msg.error);
 				break;
-		}
-	}
-
-	private async stage(
-		jobId: string,
-		fileName: string,
-		fileUrl: string,
-		artist: ImportedArtist | undefined,
-	): Promise<void> {
-		this.patch(jobId, (job) => ({ ...job, step: "staging" }));
-		try {
-			const res = await fetch(fileUrl);
-			if (!res.ok) throw new Error(`Fetching the import failed (${res.status})`);
-			const blob = await res.blob();
-			const file = new File([blob], fileName, { type: "audio/mpeg" });
-			await uploadService.enqueue([file], {
-				suggestedArtist: artist,
-				playWhenReady: true,
-			});
-			this.dismiss(jobId);
-			void bun.discardImport({ importId: jobId }).catch(() => {});
-		} catch (err) {
-			this.fail(
-				jobId,
-				err instanceof Error ? err.message : "Failed to load the import",
-			);
 		}
 	}
 

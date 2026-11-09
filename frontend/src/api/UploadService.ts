@@ -1,10 +1,5 @@
-import {
-	MAX_AUDIO_BYTES,
-	MAX_DURATION_MS,
-	MAX_NAME_LENGTH,
-} from "@/lib/limits";
-import type { ImportedArtist } from "@/api/types";
-import { blobToBase64, tooLargeMessage } from "@/lib/utils";
+import type { ImportedArtist, StagedFile } from "@/api/types";
+import { blobToBase64 } from "@/lib/utils";
 import { artistService } from "./ArtistService";
 import { bun } from "./rpc";
 import { libraryData } from "./LibraryData";
@@ -22,16 +17,14 @@ export type SuggestedArtist = ImportedArtist;
 
 export interface StagedUpload {
 	id: string;
-	file: File;
 	fileName: string;
 	title: string;
-	durationMs: number;
-	coverBlob: Blob | null;
+	coverUrl: string | null;
 	suggestedArtist: SuggestedArtist | null;
 	playWhenReady: boolean;
 }
 
-export interface EnqueueOptions {
+export interface StageOptions {
 	suggestedArtist?: SuggestedArtist;
 	playWhenReady?: boolean;
 }
@@ -42,19 +35,11 @@ export interface UploadState {
 	reviewedCount: number;
 }
 
-interface QueueEntry {
-	item: UploadItem;
-	file: File;
-	durationMs: number;
-	coverBlob: Blob | null;
-	artistIds: number[];
-	playWhenReady: boolean;
-}
-
 export interface ConfirmEdits {
 	title: string;
 	artistIds: number[];
-	coverBlob: Blob | null;
+	// Undefined keeps the staged cover; null drops it.
+	coverBlob?: Blob | null;
 }
 
 export class UploadService {
@@ -63,8 +48,6 @@ export class UploadService {
 	private staged: StagedUpload[] = [];
 	private reviewedCount = 0;
 	private snapshot: UploadState = { uploads: [], staged: [], reviewedCount: 0 };
-	private queue: QueueEntry[] = [];
-	private working = false;
 	private autoPlayed = false;
 
 	constructor() {
@@ -84,38 +67,43 @@ export class UploadService {
 
 	getSnapshot = (): UploadState => this.snapshot;
 
-	async enqueue(
-		files: Iterable<File>,
-		options: EnqueueOptions = {},
-	): Promise<void> {
-		const audioFiles = [...files].filter(
-			(file) => file.type.startsWith("audio/") || file.type === "video/mp4",
-		);
-		if (audioFiles.length === 0) return;
-		for (const file of audioFiles) {
-			const tooLarge = tooLargeMessage(file.size, MAX_AUDIO_BYTES, "track");
-			if (tooLarge) {
+	async pick(): Promise<void> {
+		const result = await bun.pickTracks();
+		if (!result.ok) {
+			this.items.push({
+				id: crypto.randomUUID(),
+				title: "Add songs",
+				status: "error",
+				error: result.error,
+			});
+			this.emit();
+			return;
+		}
+		this.add(result.staged);
+	}
+
+	add(files: readonly StagedFile[], options: StageOptions = {}): void {
+		if (files.length === 0) return;
+		for (const file of files) {
+			if (file.error) {
 				this.items.push({
 					id: crypto.randomUUID(),
-					title: file.name,
+					title: file.fileName,
 					status: "error",
-					error: tooLarge,
+					error: file.error,
 				});
-				this.emit();
 				continue;
 			}
 			this.staged.push({
-				id: crypto.randomUUID(),
-				file,
-				fileName: file.name,
-				title: clampTitle(file.name.replace(/\.[^.]+$/, "")),
-				durationMs: clampDuration(undefined),
-				coverBlob: null,
+				id: file.id,
+				fileName: file.fileName,
+				title: file.title,
+				coverUrl: file.coverUrl ?? null,
 				suggestedArtist: options.suggestedArtist ?? null,
 				playWhenReady: options.playWhenReady ?? false,
 			});
-			this.emit();
 		}
+		this.emit();
 	}
 
 	confirm(stagedId: string, edits: ConfirmEdits): void {
@@ -128,23 +116,19 @@ export class UploadService {
 			title: edits.title,
 			status: "uploading",
 		};
+		if (!this.items.some((i) => i.status === "uploading")) {
+			this.autoPlayed = false;
+		}
 		this.items.push(item);
-		this.queue.push({
-			item,
-			file: staged.file,
-			durationMs: staged.durationMs,
-			coverBlob: edits.coverBlob,
-			artistIds: edits.artistIds,
-			playWhenReady: staged.playWhenReady,
-		});
 		this.settleReviewedCount();
 		this.emit();
-		void this.work();
+		void this.upload(item, staged, edits);
 	}
 
 	skip(stagedId: string): void {
 		if (!this.staged.some((s) => s.id === stagedId)) return;
 		this.staged = this.staged.filter((s) => s.id !== stagedId);
+		void bun.discardStaged({ ids: [stagedId] });
 		this.reviewedCount += 1;
 		this.settleReviewedCount();
 		this.emit();
@@ -159,6 +143,7 @@ export class UploadService {
 
 	cancelAll(): void {
 		if (this.staged.length === 0) return;
+		void bun.discardStaged({ ids: this.staged.map((s) => s.id) });
 		this.staged = [];
 		this.reviewedCount = 0;
 		this.emit();
@@ -173,11 +158,7 @@ export class UploadService {
 				);
 				if (resolved.ok) artistIds = [resolved.id];
 			}
-			this.confirm(staged.id, {
-				title: staged.title,
-				artistIds,
-				coverBlob: staged.coverBlob,
-			});
+			this.confirm(staged.id, { title: staged.title, artistIds });
 		}
 	}
 
@@ -185,31 +166,19 @@ export class UploadService {
 		if (this.staged.length === 0) this.reviewedCount = 0;
 	}
 
-	private async work(): Promise<void> {
-		if (this.working) return;
-		this.working = true;
-		this.autoPlayed = false;
+	// Go queues confirmed uploads and sends them one at a time.
+	private async upload(
+		item: UploadItem,
+		staged: StagedUpload,
+		{ artistIds, coverBlob }: ConfirmEdits,
+	): Promise<void> {
+		const known = staged.playWhenReady ? libraryService.trackIds() : null;
 		try {
-			let entry: QueueEntry | undefined;
-			while ((entry = this.queue.shift())) {
-				await this.upload(entry);
-			}
-		} finally {
-			this.working = false;
-		}
-	}
-
-	private async upload(entry: QueueEntry): Promise<void> {
-		const { item, file, durationMs, coverBlob, artistIds, playWhenReady } =
-			entry;
-		const known = playWhenReady ? libraryService.trackIds() : null;
-		try {
-			const result = await bun.uploadTrack({
+			const result = await bun.confirmUpload({
+				stagedId: staged.id,
 				title: item.title,
-				durationMs,
-				dataBase64: await blobToBase64(file),
-				coverBase64: coverBlob ? await blobToBase64(coverBlob) : undefined,
 				artistIds,
+				coverBase64: coverBlob && (await blobToBase64(coverBlob)),
 			});
 			if (result.ok) {
 				if (await libraryData.refresh()) {
@@ -251,16 +220,6 @@ export class UploadService {
 		};
 		this.subscribers.forEach((notify) => notify());
 	}
-}
-
-function clampTitle(title: string): string {
-	return title.trim().slice(0, MAX_NAME_LENGTH) || "Untitled";
-}
-
-function clampDuration(seconds: number | undefined): number {
-	const ms = Math.round((seconds ?? 0) * 1000);
-	if (!Number.isFinite(ms) || ms < 0) return 0;
-	return Math.min(ms, MAX_DURATION_MS);
 }
 
 export const uploadService = new UploadService();

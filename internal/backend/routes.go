@@ -139,3 +139,7 @@ func (c *Client) EditPlaylist(ctx context.Context, b EditPlaylist) error {
 func (c *Client) DeletePlaylist(ctx context.Context, id int32) error {
 	return c.call(ctx, "Deleting the playlist", http.MethodPost, "/deletePlaylist", map[string]int32{"id": id}, nil, NoPayload)
 }
+
+func (c *Client) PostTrack(ctx context.Context, body Stream) error {
+	return c.call(ctx, "Upload", http.MethodPost, "/postTrack", body, nil, Audio)
+}

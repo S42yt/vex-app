@@ -361,3 +361,45 @@ func TestImageRoute(t *testing.T) {
 	}
 	res.Body.Close()
 }
+
+// Saving to disk reads the shared download while playback joins it: one backend fetch,
+// and a second save is served from the cache.
+func TestReaderSharesDownload(t *testing.T) {
+	r := newRig(t, 3<<20, 4<<20)
+	want := r.be.Tracks["t1"]
+	rd, err := r.proxy.Reader(context.Background(), "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, body := readAll(t, r.proxy.TrackURL("t1"), ""); !bytes.Equal(body, want) {
+		t.Fatal("playback got different bytes")
+	}
+	got, err := io.ReadAll(rd)
+	rd.Close()
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("reader: %v, %d bytes", err, len(got))
+	}
+	r.waitEvent(t, "download")
+	rd, _ = r.proxy.Reader(context.Background(), "t1")
+	if got, _ := io.ReadAll(rd); !bytes.Equal(got, want) || len(r.be.Log()) != 1 {
+		t.Fatalf("cached read: %d bytes, backend log %v", len(got), r.be.Log())
+	}
+	if _, err := r.proxy.Reader(context.Background(), "missing"); err == nil || !strings.Contains(err.Error(), "refused the download (404)") {
+		t.Fatalf("missing track: %v", err)
+	}
+}
+
+type covers map[string][]byte
+
+func (c covers) Cover(id string) ([]byte, bool) { b, ok := c[id]; return b, ok }
+
+func TestStagedCoverRoute(t *testing.T) {
+	r := newRig(t, 1, 0)
+	r.proxy.Staged = covers{"s1": []byte("\xff\xd8\xff\xe0jpeg")}
+	if res, body := readAll(t, r.proxy.StagedCoverURL("s1"), ""); res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/jpeg" || len(body) != 8 {
+		t.Fatalf("%d %v", res.StatusCode, res.Header)
+	}
+	if res, _ := readAll(t, r.proxy.StagedCoverURL("gone"), ""); res.StatusCode != 404 {
+		t.Fatalf("discarded cover: %d", res.StatusCode)
+	}
+}

@@ -9,9 +9,11 @@ import (
 	"github.com/VexWave/vex-app/internal/buildinfo"
 	"github.com/VexWave/vex-app/internal/busy"
 	"github.com/VexWave/vex-app/internal/datadirs"
+	"github.com/VexWave/vex-app/internal/download"
 	"github.com/VexWave/vex-app/internal/library"
 	"github.com/VexWave/vex-app/internal/media"
 	"github.com/VexWave/vex-app/internal/session"
+	"github.com/VexWave/vex-app/internal/upload"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -32,6 +34,8 @@ func main() {
 	}}
 	mediaSession := &session.MediaSession{Store: store}
 	mediaServer := media.New(mediaSession, trackCacheBytes)
+	uploads := &upload.UploadService{Bin: layout.Bin(), Busy: busyRegistry, Store: store, CoverURL: mediaServer.StagedCoverURL}
+	mediaServer.Staged = uploads
 	if err := mediaServer.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -51,6 +55,8 @@ func main() {
 			application.NewService(&session.SessionService{Store: store}),
 			application.NewService(&library.LibraryService{Store: store, URLs: mediaServer}),
 			application.NewService(binaryService),
+			application.NewService(uploads),
+			application.NewService(&download.DownloadService{Busy: busyRegistry, Tracks: mediaServer}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

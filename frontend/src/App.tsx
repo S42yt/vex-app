@@ -1,5 +1,4 @@
-import { useState, type ComponentType, type DragEvent } from "react";
-import { uploadService } from "@/api/UploadService";
+import type { ComponentType } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { AppUpdateBanner } from "@/components/AppUpdateBanner";
 import { ArtistsView } from "@/components/ArtistsView";
@@ -41,14 +40,6 @@ function App() {
 	const { view, section } = useNavigation();
 	const MainViewComponent = VIEWS[view.name];
 	const { Aside } = SECTIONS[section];
-	const [isDragging, setIsDragging] = useState(false);
-
-	const handleDrop = (e: DragEvent) => {
-		e.preventDefault();
-		setIsDragging(false);
-		uploadService.enqueue(e.dataTransfer.files);
-	};
-
 	if (binaries.phase !== "ready") return <BinarySetupScreen />;
 
 	if (session.restoring) {
@@ -62,17 +53,7 @@ function App() {
 	if (session.status !== "loggedIn") return <LoginScreen />;
 
 	return (
-		<div
-			className="flex h-screen flex-col bg-background text-foreground"
-			onDragOver={(e) => {
-				e.preventDefault();
-				setIsDragging(true);
-			}}
-			onDragLeave={(e) => {
-				if (e.currentTarget === e.target) setIsDragging(false);
-			}}
-			onDrop={handleDrop}
-		>
+		<div className="flex h-screen flex-col bg-background text-foreground">
 			<AppHeader />
 			<AppUpdateBanner />
 			<YtDlpUpdateBanner />
@@ -106,12 +87,6 @@ function App() {
 			<PlayerBar />
 
 			<UploadReviewDialog />
-
-			{isDragging && (
-				<div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center border-4 border-dashed border-primary/60 bg-background/80">
-					<p className="text-lg font-medium">Drop audio files to add them</p>
-				</div>
-			)}
 		</div>
 	);
 }

@@ -41,6 +41,11 @@ type Route struct {
 
 type Session interface{ Route() (Route, bool) }
 
+// Covers hands out the cover extracted when a local file was staged for upload.
+type Covers interface {
+	Cover(id string) ([]byte, bool)
+}
+
 // Event records how one request or download went; tests read it through onEvent.
 type Event struct {
 	Path, Range       string
@@ -55,6 +60,8 @@ type Event struct {
 type Server struct {
 	secret  string
 	session Session
+	// Staged serves /staged/<id>/cover; set before Start.
+	Staged  Covers
 	cache   *Cache
 	onEvent func(Event)
 
@@ -111,12 +118,46 @@ func (s *Server) PlaylistImageURL(id int32, version string) string {
 	return s.URL(backend.PlaylistImagePath(id, version))
 }
 
+func (s *Server) StagedCoverURL(id string) string { return s.URL("/staged/" + id + "/cover") }
+
 func (s *Server) Evict(id string) { s.cache.Delete(id) }
+
+// Reader returns a track's bytes from the cache or the shared download, or else straight
+// from the backend. Reads end with ctx.
+func (s *Server) Reader(ctx context.Context, id string) (io.ReadCloser, error) {
+	route, ok := s.session.Route()
+	if !ok {
+		return nil, backend.ErrNotLoggedIn
+	}
+	s.syncAuth(route)
+	if e, ok := s.cache.Get(id); ok {
+		return io.NopCloser(bytes.NewReader(e.Bytes)), nil
+	}
+	d := s.join(id, route)
+	select {
+	case <-d.ready:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	if d.err == nil || d.total > 0 {
+		return io.NopCloser(io.NewSectionReader(d.reader(ctx), 0, d.total)), nil
+	}
+	res, err := s.upstream(ctx, route, id, "")
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		res.Body.Close()
+		return nil, &backend.Failure{Status: res.StatusCode, Message: fmt.Sprintf("The server refused the download (%d).", res.StatusCode)}
+	}
+	return res.Body, nil
+}
 
 var (
 	reTrack = regexp.MustCompile(`^/([^/]+)/track/([^/]+)$`)
 	reHead  = regexp.MustCompile(`^/([^/]+)/track/([^/]+)/head$`)
 	reImage = regexp.MustCompile(`^/([^/]+)/(track|artist|playlist)/([^/]+)/image$`)
+	reCover = regexp.MustCompile(`^/([^/]+)/staged/([^/]+)/cover$`)
 )
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -132,6 +173,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if m := reImage.FindStringSubmatch(r.URL.Path); m != nil && m[1] == s.secret {
 		s.serveImage(w, r, m[2], m[3])
 		return
+	}
+	if m := reCover.FindStringSubmatch(r.URL.Path); m != nil && m[1] == s.secret && s.Staged != nil {
+		if b, ok := s.Staged.Cover(m[2]); ok {
+			http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(b))
+			return
+		}
 	}
 	var m []string
 	isHead := false

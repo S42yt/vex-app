@@ -28,12 +28,28 @@ export interface RpcFailure {
 
 export type RpcResult = { ok: true } | RpcFailure;
 
-export interface UploadTrackParams {
+// A local file staged by Go for the review dialog, or refused with `error`.
+export interface StagedFile {
+	id: string;
+	fileName: string;
 	title: string;
 	durationMs: number;
-	dataBase64: string;
-	coverBase64?: string;
-	artistIds?: number[];
+	coverUrl?: string;
+	error?: string;
+}
+
+export type PickTracksResult = { ok: true; staged: StagedFile[] } | RpcFailure;
+
+export interface ConfirmUploadParams {
+	stagedId: string;
+	title: string;
+	artistIds: number[];
+	// Absent keeps the staged cover; null drops it.
+	coverBase64?: string | null;
+}
+
+export interface DiscardStagedParams {
+	ids: string[];
 }
 
 export interface RemoteTrack {
@@ -192,10 +208,9 @@ export type UrlImportProgressMessage =
 			totalBytes?: number;
 	  }
 	| {
-			type: "finished";
+			type: "staged";
 			importId: string;
-			fileName: string;
-			fileUrl: string;
+			staged: StagedFile;
 			artist?: ImportedArtist;
 	  }
 	| { type: "failed"; importId: string; error: string };

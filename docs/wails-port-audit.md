@@ -342,14 +342,15 @@ Responses are not capped: a 100 MiB return value arrived in 1.4 s.
   - `ffprobe -print_format json -show_format -show_streams` gives the title (format tags, else the audio stream's tags, else the filename) and the duration.
   - The `attached_pic` stream is copied out with `ffmpeg -map 0:<index> -c copy -f image2pipe -`.
   - ffprobe is always installed before the UI opens (`App.tsx:52`, `BinaryManager.ts:341-353`). Its spawns hold the shared bin lock like every managed binary (§3.13).
-  - "Has an audio stream" replaces today's MIME filter.
+  - "Has an audio stream" replaces today's MIME filter. A file without one, or one that can't be read, comes back with an `error` and shows as a failed row, like a file over the limit; nothing is dropped silently.
+  - `Stage` and `Cover` are marked `//wails:ignore`, so they stay out of the generated bindings; only `Pick`, `Confirm` and `Discard` are for the webview. Skipped and cancelled reviews call `Discard`.
 - **Finished imports:** the importer writes to `VexWaveData\<channel>\imports\` (today a single `%LOCALAPPDATA%\VexWave\imports` shared by all channels, `UrlImporter.ts:58`). It knows its output path (`UrlImporter.ts:134,177`) and calls `Stage` itself. `ImportService.stage()`'s fetch-into-Blob (`ImportService.ts:143-167`) is deleted.
 - **`Confirm(stagedID, edits)`:**
   - **Format:** base64 inside JSON stays, because it is the backend's current contract. If the backend later adds a raw or multipart upload endpoint, only `Confirm`'s body builder changes.
   - Builds the contract body (`contract.ts:33-42`) as `json.Marshal(meta)` minus the closing brace, then `,"data":"`, then the file through `base64.NewEncoder` over an `io.Pipe`, then `"}`.
   - `Content-Length` is exact: prefix + `base64.StdEncoding.EncodedLen(size)` + 2.
   - Evidence (`port-sandbox/gotests/upload/upload_test.go`): a 75 MiB file produced a 104 857 699-byte body, decoded byte-identical by `encoding/json`, with **0.2 MiB** allocated during the upload.
-- **Queue:** uploads run one at a time in a Go worker, holding a `busy.Transfer` token. That closes the gap `AppUpdateService.ts:66-73` works around ("Bun sees only the upload in flight, not the queue behind it").
+- **Queue:** uploads run one at a time in confirm order: each `Confirm` waits for the done channel of the one confirmed before it, and holds a `busy.Transfer` token from the moment it's queued (`TestConfirmQueue`). The webview calls `Confirm` as soon as a track is confirmed, so its own queue goes. That closes the gap `AppUpdateService.ts:66-73` works around ("Bun sees only the upload in flight, not the queue behind it").
 - **Covers picked in dialogs** (`ArtistDialog.tsx:168`, `EditTrackDialog.tsx:176`, `PlaylistDialog.tsx:179`, `UploadReviewDialog.tsx:172`) stay browser `File` → base64 → binding. They are ≤ 10 MiB of base64 (`limits.ts:6`): under the cap, about 1.5 s worst case at the measured rate.
 
 **ffprobe vs `music-metadata`** (`port-sandbox/gotests/upload/probe_test.go`, ffmpeg-generated fixtures in `port-sandbox/fixtures/`):
@@ -410,7 +411,7 @@ Each bound call is a goroutine, so every piece of state Bun's event loop protect
 | App update state (`AppUpdater.ts:22-24`) | The Wails updater owns its state (`sync.RWMutex`, `wails:v3/pkg/updater/updater.go:197-201`); `UpdateService` holds `busy.AppDownload` around `DownloadAndInstall` | No state of our own left | `updatertest` |
 | Discord presence (`DiscordPresence.ts:60-280`, three nullable timers) | One actor goroutine owns the socket, state and timers. Callers send on channels; `SetEnabled` carries a reply channel ("the switch is a request", root `CLAUDE.md`). A reader goroutine forwards frames tagged with their socket, so stale frames are ignored | Timer callbacks and socket events mutate the same fields; an actor removes `clearTimer` and the reentrancy reasoning | `presence_test.go`: 101 changes from 20 goroutines → 3 sends ≥ 5 s floor apart (scaled), last track wins; concurrent toggles |
 | Stream downloads + cache (§3.1) | `downloads` map under the server mutex; each `download` has its own mutex plus a close-and-replace `changed` channel; the cache is a mutex LRU | Readers must wait on progress *and* their request ctx; a channel can be `select`ed, a `sync.Cond` can't | `media` tests |
-| Upload staging + queue (§3.2) | Mutex-guarded map of staged entries (bound calls and the cover route); one upload worker as for imports | Short critical sections, two goroutine sources | same shape as `importer` |
+| Upload staging + queue (§3.2) | Mutex-guarded map of staged entries (bound calls and the cover route); each `Confirm` waits on the previous one's done channel | Short critical sections, two goroutine sources; a chain of channels keeps confirm order without a worker | `upload_test.go` (`TestConfirmQueue`) |
 | Proxy setting (`ApiClient.proxyUrl`) | The proxy is part of the immutable `Session`. `netx.For(proxy)` hands out that proxy's API and stream clients, rebuilt only when the proxy changes (mutex), since transports pool connections per proxy; yt-dlp env and updater read the session's proxy | Read on every request, written on login/settings | covered by `session` pattern |
 
 Two more findings:
@@ -565,7 +566,7 @@ Evidence (`port-sandbox/gotests/datadirs/datadirs_test.go`, with real HKCU keys 
 
 `TrackDownloader.ts:17-20` shares one 120 s RPC between the picker and the copy. In Go:
 - **Picker:** `app.Dialog.OpenFile().CanChooseFiles(false).CanChooseDirectories(true).SetDirectory(start).PromptForSingleSelection()` (`dialogs.go:234-239,287,350`), with no timeout.
-- **Bytes:** from the cache, or a `progressive` reader on the shared download (§3.1), instead of an HTTP self-request (`:31`). Copied with `io.Copy` rather than `arrayBuffer()` (`:39`), holding a `busy.Transfer` token.
+- **Bytes:** from the cache, or a `progressive` reader on the shared download (§3.1), instead of an HTTP self-request (`:31`). Copied with `io.Copy` rather than `arrayBuffer()` (`:39`), holding a `busy.Transfer` token from when the folder is chosen (today it is held while the dialog is open too).
 - **File naming:** `freeName`'s exists-then-write race (`:74-85`) becomes `os.OpenFile(…, O_CREATE|O_EXCL)`. `fitName`'s 250-unit budget (`:57-72`) is UTF-16, so measure it with `utf16.RuneLen`.
 
 ### 3.13 Managed binaries — **med**
@@ -638,7 +639,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 
 - **`api/rpc.ts`** (`:1-16`): rewritten as the facade.
 - **`api/UploadService.ts`**:
-  - staging comes from Go (`Uploads.Pick()`, `uploads:staged` from imports) instead of `File` objects;
+  - staging comes from Go (`Uploads.Pick()`, `import:staged` from imports) instead of `File` objects;
   - `parseBlob` (`:1,109`), the MIME filter (`:93-95`) and the base64 encode of audio (`:219`) go;
   - `confirm` sends `{stagedId, title, artistIds, coverBase64?}`;
   - review state (`staged`, `reviewedCount`) stays in the webview;
@@ -747,7 +748,7 @@ Seams:
   - takes a `Session` interface (route plus `Expire(seen)` for a 401) and `upload`'s staged-cover lookup, through an interface defined in `media` so the packages don't import each other;
   - exposes `TrackURL`, `HeadURL`, `ImageURL`, `StagedCoverURL`, `Evict`, and `Reader(ctx, id)` for `download`.
 - **`busy.Registry`** is injected into `importer`, `search`, `binaries`, `upload`, `download`, `update` and `uninstall`, so a new spawner can't be written without it.
-- **Spawning managed binaries:** `platform.Command()` is the only spawn path, and for a binary in `bin\` it takes `datadirs.LockBin` shared for the process's lifetime. `binaries` takes it exclusively.
+- **Spawning managed binaries:** `platform.Command()` is the only spawn path. Whoever runs a binary in `bin\` holds `datadirs.LockBin` shared around the spawns (`upload.Stage` once per call, covering every ffprobe/ffmpeg it runs). `binaries` takes it exclusively.
 - **Events:** a one-method `Emitter` interface (implemented by `*application.App`) keeps services testable without a window, as the sandbox tests do.
 - **Lifecycles** use `ServiceStartup`/`ServiceShutdown`:
   - `media` starts its listener;
@@ -765,7 +766,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `session` | `port-sandbox/gotests/session` | `session_test.go` |
 | `media` | `port-sandbox/gotests/media` (`Event` stays only as the unexported `onEvent` hook the tests read) | `server_test.go`, `fakebackend.go` |
 | `netx`, `backend` (errors, `Retry-After`) | `port-sandbox/gotests/netx` | `netx_test.go` |
-| `upload` | `port-sandbox/gotests/upload` | `upload_test.go`; `probe_test.go` asserting the ffprobe results directly (the `music-metadata` comparison through `fixtures/mm.ts` stays in the reference); `gen.sh` moves to `internal/upload/testdata/` |
+| `upload` | `port-sandbox/gotests/upload` | `upload_test.go`; `probe_test.go` asserting the ffprobe results directly (the `music-metadata` comparison through `fixtures/mm.ts` stays in the reference); `gen.sh` moves to `internal/upload/testdata/`, and the tests run it with the managed ffmpeg when the git-ignored fixtures are missing. Without a managed ffprobe (as in CI) the probe tests skip |
 | `importer` | `port-sandbox/gotests/importer` | `importer_test.go` |
 | `search` | `port-sandbox/gotests/search`, `port-sandbox/gotests/ranking` | `search_test.go`; `rank_test.go` against `testdata/pages.json` and the golden `testdata/ranked.json` (§3.5) |
 | `presence` | `port-sandbox/gotests/presence`, `port-sandbox/gotests/pipe` | `presence_test.go`, `pipe_test.go` |

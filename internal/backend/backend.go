@@ -43,21 +43,33 @@ type Client struct {
 	HTTP           *http.Client
 }
 
+// Stream is a JSON request body that is already encoded, sent as is with its exact length.
+type Stream struct {
+	Reader io.Reader
+	Len    int64
+}
+
 // Do sends one request. A non-2xx answer becomes a *Failure (fallback names it when the
 // server sends no plain-text reason); a transport error is returned as is.
 func (c *Client) Do(ctx context.Context, method, path string, body, out any, fallback string, payload Payload) error {
 	var rd io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
+	var length int64
+	switch b := body.(type) {
+	case nil:
+	case Stream:
+		rd, length = b.Reader, b.Len
+	default:
+		data, err := json.Marshal(body)
 		if err != nil {
 			return err
 		}
-		rd = bytes.NewReader(b)
+		rd, length = bytes.NewReader(data), int64(len(data))
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, rd)
 	if err != nil {
 		return err
 	}
+	req.ContentLength = length
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

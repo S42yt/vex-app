@@ -1,20 +1,24 @@
 import { Events } from "@wailsio/runtime";
 import * as EventNames from "../../bindings/events";
 import * as Binaries from "../../bindings/github.com/VexWave/vex-app/internal/binaries/binaryservice";
+import * as Download from "../../bindings/github.com/VexWave/vex-app/internal/download/downloadservice";
 import * as Library from "../../bindings/github.com/VexWave/vex-app/internal/library/libraryservice";
 import * as Session from "../../bindings/github.com/VexWave/vex-app/internal/session/sessionservice";
+import * as Upload from "../../bindings/github.com/VexWave/vex-app/internal/upload/uploadservice";
 import type {
 	AppUpdateProgressMessage,
 	AppUpdateResult,
 	BinaryProgressMessage,
 	BinaryStatus,
 	BinaryStatusResult,
+	ConfirmUploadParams,
 	CreateArtistParams,
 	CreatePlaylistParams,
 	DeleteArtistParams,
 	DeletePlaylistParams,
 	DeleteTrackParams,
 	DiscardImportParams,
+	DiscardStagedParams,
 	DownloadTrackParams,
 	DownloadTrackResult,
 	EditArtistParams,
@@ -25,6 +29,7 @@ import type {
 	InstallAppUpdateResult,
 	LoginParams,
 	LoginResult,
+	PickTracksResult,
 	PresenceMessage,
 	PresenceStatus,
 	ProxyParams,
@@ -35,8 +40,8 @@ import type {
 	SearchMediaParams,
 	SearchMediaResult,
 	SetPresenceEnabledParams,
+	StagedFile,
 	UninstallTarget,
-	UploadTrackParams,
 	UrlImportProgressMessage,
 	YtDlpUpdateResult,
 } from "./types";
@@ -47,7 +52,9 @@ type Requests = {
 	logout(): Promise<RpcResult>;
 	setProxy(params: ProxyParams): Promise<RpcResult>;
 	getLibrary(): Promise<GetLibraryResult>;
-	uploadTrack(params: UploadTrackParams): Promise<RpcResult>;
+	pickTracks(): Promise<PickTracksResult>;
+	confirmUpload(params: ConfirmUploadParams): Promise<RpcResult>;
+	discardStaged(params: DiscardStagedParams): Promise<RpcResult>;
 	deleteTrack(params: DeleteTrackParams): Promise<RpcResult>;
 	downloadTrack(params: DownloadTrackParams): Promise<DownloadTrackResult>;
 	editTrack(params: EditTrackParams): Promise<RpcResult>;
@@ -114,6 +121,15 @@ const ported: Partial<Requests> = {
 	setProxy: (p) => settle(Session.SetProxy(p)),
 	getLibrary: () =>
 		settle(Library.GetLibrary(), (lib) => lib as unknown as RemoteLibrary),
+	pickTracks: () =>
+		settle(Upload.Pick(), (staged) => ({ staged: staged as StagedFile[] })),
+	confirmUpload: (p) => settle(Upload.Confirm(p)),
+	discardStaged: (p) => settle(Upload.Discard(p.ids)),
+	downloadTrack: (p) =>
+		settle(Download.SaveTrack(p), (r) => ({
+			path: r.path ?? null,
+			folder: r.folder,
+		})),
 	deleteTrack: (p) => settle(Library.DeleteTrack(p)),
 	editTrack: (p) => settle(Library.EditTrack(p)),
 	createArtist: (p) => settle(Library.CreateArtist(p)),

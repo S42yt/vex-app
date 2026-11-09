@@ -67,7 +67,8 @@ function ReviewForm({
 }) {
 	const suggestion = item.suggestedArtist;
 	const [title, setTitle] = useState(item.title);
-	const [coverBlob, setCoverBlob] = useState<Blob | null>(item.coverBlob);
+	// Undefined is the cover Go extracted while staging.
+	const [coverBlob, setCoverBlob] = useState<Blob | null | undefined>();
 	const [linkArtist, setLinkArtist] = useState(true);
 	const [preview, setPreview] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -76,13 +77,13 @@ function ReviewForm({
 
 	useEffect(() => {
 		if (!coverBlob) {
-			setPreview(null);
+			setPreview(coverBlob === undefined ? item.coverUrl : null);
 			return;
 		}
 		const url = URL.createObjectURL(coverBlob);
 		setPreview(url);
 		return () => URL.revokeObjectURL(url);
-	}, [coverBlob]);
+	}, [coverBlob, item.coverUrl]);
 
 	const pickCover = (file: File) => {
 		const tooLarge = tooLargeMessage(file.size, MAX_IMAGE_BYTES, "image");
@@ -158,7 +159,7 @@ function ReviewForm({
 							<ImagePlus className="h-6 w-6 text-white" />
 						</span>
 					</button>
-					{coverBlob && (
+					{preview && (
 						<button
 							type="button"
 							onClick={() => setCoverBlob(null)}
