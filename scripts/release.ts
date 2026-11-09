@@ -2,10 +2,10 @@
 // and pushes it. Pushing that tag is the only thing that builds stable, so this
 // script is the whole release procedure. Run: bun scripts/release.ts
 import { $ } from "bun";
+import { setVersion } from "./set-version";
 
 const CONFIG = "build/config.yml";
-// info.version: the first double-quoted `version:`. The file's own `version: '3'` is single-quoted.
-const VERSION_LINE = /^(\s*version:\s*)"[^"]*"/m;
+const INFO = "build/windows/info.json";
 const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)$/;
 
 function fail(message: string): never {
@@ -56,9 +56,9 @@ const bumps = {
 const recommended = latest ? bumps.patch : "0.1.0";
 
 const configText = await Bun.file(CONFIG).text();
-const configVersion = configText.match(VERSION_LINE)
-	? configText.match(/^\s*version:\s*"([^"]*)"/m)![1]!
-	: fail(`No version line found in ${CONFIG}.`);
+const configVersion =
+	configText.match(/^\s*version:\s*"([^"]*)"/m)?.[1] ??
+	fail(`No version line found in ${CONFIG}.`);
 
 const head = (await run($`git rev-parse --short HEAD`)).trim();
 const subject = (await run($`git log -1 --format=%s`)).trim();
@@ -87,7 +87,7 @@ const bumpsConfig = configVersion !== version;
 
 console.log(`\n  This will:`);
 if (bumpsConfig) {
-	console.log(`    - set ${CONFIG} to ${version} and commit it`);
+	console.log(`    - set ${CONFIG} and ${INFO} to ${version} and commit them`);
 }
 if (ahead || bumpsConfig) {
 	console.log(`    - push main to origin`);
@@ -102,8 +102,8 @@ if ((prompt(`\n  Release ${tag}? [y/N]:`) ?? "").trim().toLowerCase() !== "y") {
 }
 
 if (bumpsConfig) {
-	await Bun.write(CONFIG, configText.replace(VERSION_LINE, `$1"${version}"`));
-	await $`git add ${CONFIG}`.quiet();
+	await setVersion(version);
+	await $`git add ${CONFIG} ${INFO}`.quiet();
 	await $`git commit -m ${`Set the version to ${version}`}`.quiet();
 	console.log(`\n  Committed the version bump.`);
 }

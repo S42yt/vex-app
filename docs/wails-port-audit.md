@@ -41,7 +41,7 @@ The port starts on a new branch from a **fresh `wails3 init -t react` project** 
 | Product (canary, not packaged yet, §5) | `VexWave Canary`, `Programs\VexWave Canary` | its installer config, once canary is packaged |
 | Product identifier | `app.vexwave` (an app ID only, not the old uninstaller's registry key) | `build/config.yml` `info.productIdentifier` |
 | `UNINST_KEY_NAME` (stable / canary) | `VexWave` / `VexWave Canary`. Set explicitly; the default would be `<Company><Product>` | `project.nsi`, `buildinfo` |
-| Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (the Taskfile's `<APP_NAME>-installer.exe`) for first installs. None is `VexWave-Setup.exe` (§5) | `build-windows.yml` |
+| Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (`project.nsi` writes `bin/VexWave-amd64-installer.exe`; CI renames it) for first installs. `SHA256SUMS` is `sha256sum` output for both exes; the provider strips its `*` (`wails:v3/pkg/updater/providers/github/github.go:352-375`). None is `VexWave-Setup.exe` (§5) | `build-windows.yml` |
 
 ### Layout: the Wails template's, unchanged
 
@@ -243,7 +243,7 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | HiDPI | `index.ts:204-222`, `bundleCEF`, `lib/devicePixelRatio.ts` | electrobun#324 | Wails manifest declares `permonitorv2` | Yes: deleted | low | test: `devicePixelRatio` 1.25 at 125 % scaling; WebView2 started with `--embedded-browser-webview-dpi-awareness=2` |
 | Installer | `scripts/fuse-installer.ts`, `build-windows.yml` | One setup exe | `wails3 package` → NSIS, per-user scope | Yes: deleted | med | src; build and run: §7 |
 | Version & release | `scripts/release.ts:6-9`, `build-windows.yml:71-81` | Version from tag | `build/config.yml` `info.version` | Same | low | src |
-| Channels | `index.ts:18`, `AppUpdater.ts:38-39` | dev/canary/stable | ldflags `channel`; per-channel install folder from the installer, Uninstall key in `buildinfo`, and `VexWaveData\<channel>\`; canary doesn't self-update. Only stable is packaged for now (§5) | Same | low | n/a |
+| Channels | `index.ts:18`, `AppUpdater.ts:38-39` | dev/canary/stable | the `stable` build tag; per-channel install folder from the installer, Uninstall key in `buildinfo`, and `VexWaveData\<channel>\`; canary doesn't self-update. Only stable is packaged for now (§5) | Same | low | n/a |
 | Web Audio over loopback | `AudioPlayer.ts:38-41`, `StreamProxy.ts:151-168` | `crossOrigin` media needs ACAO | Same headers from Go | Same | low | test: analyser peak 0.125 (untainted) |
 | Single instance | absent | Two copies race on `bin/`, imports | `Options.SingleInstance` | New | low | test: second launch exits in ~1 s, first gets its args |
 | Type-check / CI | `.github/workflows/ci.yml` | tsc both projects | On `windows-latest`: tsc (`frontend/`, `contract/`), `go vet`, `go test -race`, bindings and limits freshness | Yes | low | n/a |
@@ -526,12 +526,15 @@ What it replaces:
 
 Wails equivalents (src):
 - **Installer:** `wails3 package` builds NSIS. `!define WAILS_INSTALL_SCOPE "user"` installs to `$LOCALAPPDATA\Programs\<Product>` (`wails:v3/internal/commands/build_assets/windows/nsis/project.nsi.tmpl:32,76-77`). It writes `UninstallString` and `QuietUninstallString` (`…\uninstall.exe" /S`) under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\<UNINST_KEY_NAME>`, which defaults to `<Company><Product>` (`wails:v3/internal/commands/updatable_build_assets/windows/nsis/wails_tools.nsh.tmpl:25-28,127-136`). Building and running it is still to check (§7).
-- **Stable only for now:** `wails3 package` builds the stable installer, installing to `Programs\VexWave`. Set `UNINST_KEY_NAME` explicitly in `project.nsi` (`VexWave`, Port setup → Names) (`wails_tools.nsh` only defines it when it's unset): §3.11 checks this exact name, and `buildinfo` holds it. The name must not be the Electrobun key `<identifier>` (`app.vexwave`, `electrobun.config.ts:6`), because the old uninstaller deletes that key (`Uninstaller.ts:75`). A separate canary product is deferred (§5).
+- **Stable only for now:** `wails3 task package EXTRA_TAGS=stable` builds the stable installer, installing to `Programs\VexWave`. `project.nsi` sets `WAILS_INSTALL_SCOPE "user"` itself, so a plain `wails3 task package` builds the per-user installer, and sets `UNINST_KEY_NAME` explicitly (`VexWave`, Port setup → Names) (`wails_tools.nsh` only defines it when it's unset): §3.11 checks this exact name, and `buildinfo` holds it. The name must not be the Electrobun key `<identifier>` (`app.vexwave`, `electrobun.config.ts:6`), because the old uninstaller deletes that key (`Uninstaller.ts:75`). A separate canary product is deferred (§5).
 - **Install folder:** holds only the app, `uninstall.exe` and the updater's transient `wails-update-*` staging (§3.9). User data goes to `VexWaveData` (Ground rules 6).
 - **Dark caption:** `WindowsWindow{Theme: application.Dark, CustomTheme: ThemeSettings{…}}` (`wails:v3/pkg/application/webview_window_options.go:366-372,439-450`). The colours in `WindowChrome.ts:22-24` carry over, the same for active and inactive, as the DWM attributes were. Checked with Windows in dark mode: the caption pixel reads `#1c1c1c`. The icon needs nothing at runtime, since Wails embeds it in the exe.
 - **DPI:** the manifest declares `permonitorv2,permonitor` (`wails:v3/internal/commands/updatable_build_assets/windows/wails.exe.manifest.tmpl:11-12`). Measured: at 125 % scaling the page reports `devicePixelRatio` 1.25, and WebView2 starts with `--embedded-browser-webview-dpi-awareness=2`. No nudge is needed. `lib/devicePixelRatio.ts` keeps its media query; its `resize` trigger was for CEF and is gone.
 - **Build:** `wails3 build` with `PACKAGE_MANAGER=bun` worked end to end in the sandbox. The frontend build is `tsc && vite build`; bindings come from `wails3 generate bindings -clean=true -ts -i` (`port-sandbox/app/build/Taskfile.yml:191`).
-- **Release flow:** `scripts/release.ts` rewrites `build/config.yml` instead of `electrobun.config.ts` (`release.ts:6-9`). The channel is an ldflags value (`stable` in the release build, `dev` otherwise). CI builds, packages and publishes stable only; canary packaging is deferred (§5).
+- **Release flow:**
+  - `scripts/set-version.ts` writes the version into `build/config.yml` and `build/windows/info.json`. `release.ts` calls it for the bump commit, and CI calls it with the tag. Regenerating `info.json` with `wails3 update build-assets` isn't an option: it recreates the deleted macOS, iOS and Linux folders and resets `info.json`'s `Comments`.
+  - **No ldflags:** the generated `BUILD_FLAGS` would need editing for `-X`. Instead the channel is a build tag passed through the Taskfile's `EXTRA_TAGS` (`wails3 task package EXTRA_TAGS=stable` builds `-tags=production,stable`; no tag means `dev`). `buildinfo.Version` reads the exe's own version resource, which `generate:syso` builds from `info.json`. So the version the updater compares is the one Windows shows, and `go run`/`go test` read `0.0.0`.
+  - `build-windows.yml` builds and packages stable on a `v*` tag and publishes the assets above; a manual run builds the same without publishing. Canary packaging is deferred (§5). NSIS is installed by the workflow if the runner lacks it.
 - **Build assets:** only `build/windows/` is needed. With the other platforms' folders deleted, the `generate:icons` task must drop its macOS outputs (`-macfilename ""`); `wails3 build` then works (`port-sandbox/app/build/Taskfile.yml`, `generate:icons`).
 
 ### 3.11 Uninstaller — **med**
@@ -558,7 +561,7 @@ Evidence (`port-sandbox/gotests/datadirs/datadirs_test.go`, with real HKCU keys 
 
 **Where the rule runs: inside the NSIS uninstaller**, so the in-app button and Settings → Apps behave the same.
 - The uninstall section (`project.nsi`, from `wails:v3/internal/commands/build_assets/windows/nsis/project.nsi.tmpl:105-119`) runs `ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --remove-data'` before `RMDir /r $INSTDIR`.
-- `--remove-data` is dispatched in `main.go` before `application.New`, so `SingleInstance` never sees it. It takes its channel from ldflags and the other channels' key names from `buildinfo`.
+- `--remove-data` is dispatched in `main.go` before `application.New`, so `SingleInstance` never sees it. It takes its channel and the other channels' key names from `buildinfo`.
 - The template's `RMDir /r "$AppData\${PRODUCT_EXECUTABLE}"` (`:108`) targets the default WebView2 profile, which the app no longer uses (§3.8). That line is deleted.
 - The rule lives in Go rather than NSIS script so that it is tested. Whether the NSIS side calls it correctly is checked with the installer run (§7).
 
@@ -732,7 +735,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 ```
 main.go                        // embed frontend/dist, mode dispatch before application.New (--uninstall-helper, --remove-data), window, wiring
 internal/
-  buildinfo/                   // Version, Channel (ldflags), the channels' UNINST_KEY_NAMEs
+  buildinfo/                   // Channel (build tag), Version (the exe's version resource), the channels' UNINST_KEY_NAMEs
   datadirs/                    // Layout (%LOCALAPPDATA%\VexWaveData\{bin, <channel>\webview, <channel>\imports}), RemoveData rule, LockBin (bin\.lock)
   platform/                    // Command(): CREATE_NO_WINDOW + HideWindow, PATH appended last
   netx/                        // For(proxy): cached API + stream clients; httpproxy ProxyFunc; OnProxyConnectResponse → ProxyAuthError; Unreachable text

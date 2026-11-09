@@ -33,6 +33,10 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+# Per-user install to $LOCALAPPDATA\Programs\VexWave: the updater stages beside the exe, so the folder must be user-writable.
+!define WAILS_INSTALL_SCOPE "user"
+# The app's uninstall check reads this exact key (internal/buildinfo); the default would be "realChrissVexWave".
+!define UNINST_KEY_NAME "VexWave"
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -105,7 +109,8 @@ SectionEnd
 Section "uninstall" 
     !insertmacro wails.setShellContext
 
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+    # Removes this channel's data, and the shared data when no other channel is installed.
+    ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --remove-data'
 
     RMDir /r $INSTDIR
 
