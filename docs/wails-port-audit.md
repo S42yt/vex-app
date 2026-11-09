@@ -27,8 +27,8 @@ These bind every porting session.
 ### Start
 
 The port starts on a new branch from a **fresh `wails3 init -t react` project** (v3.1.0), not by converting the Electrobun project in place.
-- **Branch from `main`**, after the commit that adds `docs/` and `port-sandbox/` (below: the *reference commit*). Shared history lets the finished port land on `main` as an ordinary merge, and the Electrobun history stays in `git log`. An orphan branch would need `--allow-unrelated-histories` to merge.
-- **First commit:** delete the Electrobun tree, except what the table below carries over. Generate the template into the repo root.
+- **Branch from `main`**, after `6ba637c`, the commit that adds `docs/` and `port-sandbox/` (below: the *reference commit*). Shared history lets the finished port land on `main` as an ordinary merge, and the Electrobun history stays in `git log`. An orphan branch would need `--allow-unrelated-histories` to merge.
+- **First commit:** delete the Electrobun tree, except what the table below carries over. Generate the template into the repo root. Add the root `.gitattributes` and `CLAUDE.md` (below), then run `git add --renormalize .` so every committed text file is LF.
 - **Trim the template the way `port-sandbox/app` was trimmed:** delete the non-Windows build assets, give `generate:icons` `-macfilename ""`, and delete the demo service, the demo images and the template's styles.
 
 ### Layout: the Wails template's, unchanged
@@ -45,6 +45,7 @@ contract/                 backend contract, limits generator, test backend (bun;
 scripts/release.ts
 docs/wails-port-audit.md
 .github/workflows/, .claude/skills/preview/, README.md, assets/
+.gitattributes, .gitignore, CLAUDE.md
 ```
 
 Why this layout:
@@ -106,16 +107,30 @@ VexWave: a Windows desktop music player on Wails v3.1.0 (Go 1.26, WebView2), wit
 - **Keep this file short:** structure, rules that span files, and what the code can't say. The spec lives in the report.
 ```
 
+### Root `.gitattributes`
+
+The first commit also adds this file, so text files stay LF on Windows checkouts, both locally and in CI. On `windows-latest`, `actions/checkout` converts text files to CRLF by default, which a `gofmt` check reports as a diff. The binary lines cover every binary type the branch holds: the PNG screenshots and `appicon.png`, `icon.ico`, the `woff2` wordmark font, and the template's `ttf` and `jpg` files while they're still there. They also cover the WebView2 bootstrapper `.exe` that packaging writes into `build/windows/nsis`.
+
+```
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.ttf binary
+*.woff2 binary
+*.exe binary
+```
+
 ### Reaching the Electrobun app
 
 Once the branch no longer contains the Electrobun app, porting sessions use a separate checkout of the reference commit, next to the repo:
 
 ```
-git worktree add --detach ../vex-app-electrobun <reference commit>
+git worktree add --detach ../vex-app-electrobun 6ba637c
 cd ../vex-app-electrobun && bun install
 ```
 
-- **References:** `file:line` references in this report point to `main` at `77faba4`. The reference commit adds only `docs/` and `port-sandbox/`, so every reference resolves in the checkout: `StreamProxy.ts:108` is `../vex-app-electrobun/src/bun/StreamProxy.ts:108`. Without a checkout, use `git show 77faba4:src/bun/StreamProxy.ts` or `git grep <pattern> 77faba4`.
+- **References:** `file:line` references in this report point to `main` at `77faba4`. The reference commit `6ba637c` adds only `docs/` and `port-sandbox/` on top of it, so every reference resolves in the checkout: `StreamProxy.ts:108` is `../vex-app-electrobun/src/bun/StreamProxy.ts:108`. Without a checkout, use `git show 77faba4:src/bun/StreamProxy.ts` or `git grep <pattern> 77faba4`.
 - **Behaviour:** run the Electrobun app there (`bun run dev:hmr`) to compare behaviour side by side, against the same backend.
 - **Sandbox:** `port-sandbox/` runs there too: the Go suite, the CDP probes, the ranking comparison and the Wails-bump re-runs (Ground rules 2).
 - **Wails sources:** `wails:v3/<path>` references resolve in the Go module cache at `$(go env GOMODCACHE)/github.com/wailsapp/wails/v3@v3.1.0/<path>`. `wails:docs/…` needs a clone of the `v3.1.0` tag.
