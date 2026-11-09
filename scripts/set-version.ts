@@ -1,6 +1,3 @@
-// Sets the app version everywhere a build reads it: build/config.yml, the exe's version resource
-// (info.json, which the updater compares), its manifest, and the installer's version and the
-// DisplayVersion it registers (wails_tools.nsh). Run: bun scripts/set-version.ts 1.2.3
 const CONFIG = "build/config.yml";
 const INFO = "build/windows/info.json";
 const MANIFEST = "build/windows/wails.exe.manifest";

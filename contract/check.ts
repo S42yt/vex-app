@@ -1,5 +1,3 @@
-// Fails on any exchange the contract would refuse or only half read. Takes a JSON
-// array on stdin; internal/backend/contracttest feeds it what the Go client sends.
 import { z } from "zod";
 import { ApiContract } from "./contract";
 
@@ -9,7 +7,6 @@ type Route = { method: string; path: string; body?: unknown; responses: Record<n
 const isRecord = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && Object.getPrototypeOf(v) === Object.prototype;
 
-// zod drops the keys a schema doesn't name instead of rejecting them.
 const dropped = (sent: unknown, parsed: unknown, at: string): string[] => {
 	if (Array.isArray(sent) && Array.isArray(parsed)) {
 		return sent.flatMap((v, i) => dropped(v, parsed[i], `${at}[${i}]`));

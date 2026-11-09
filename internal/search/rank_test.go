@@ -23,8 +23,6 @@ type ranked struct {
 	Scores []float64 `json:"scores"`
 }
 
-// testdata/pages.json holds real yt-dlp result pages plus synthetic edge cases. The golden
-// ranked.json was written by this ranker after it matched the Electrobun app's on every real page.
 func TestRankGolden(t *testing.T) {
 	raw, err := os.ReadFile("testdata/pages.json")
 	if err != nil {

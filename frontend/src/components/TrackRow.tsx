@@ -39,8 +39,6 @@ export function TrackRow({
 					tabIndex={0}
 					onClick={onPlay}
 					onKeyDown={(e) => {
-						// Keys on the inner kebab bubble here; without the guard the row would
-						// also play.
 						if (e.target !== e.currentTarget) return;
 						if (e.key === "Enter" || e.key === " ") {
 							e.preventDefault();

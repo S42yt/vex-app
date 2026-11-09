@@ -1,4 +1,3 @@
-// Package netx builds the outbound HTTP clients and describes their failures.
 package netx
 
 import (
@@ -12,12 +11,10 @@ import (
 	"golang.org/x/net/http/httpproxy"
 )
 
-// ProxyAuthError is a proxy's 407 to a CONNECT, which Go otherwise reports only as text.
 type ProxyAuthError struct{}
 
 func (*ProxyAuthError) Error() string { return "proxy authentication required" }
 
-// Clients are the two transports for one proxy setting.
 type Clients struct {
 	Proxy string
 	// API offers gzip; Stream doesn't, so a whole-file response keeps its Content-Length.
@@ -29,8 +26,6 @@ var (
 	last *Clients
 )
 
-// For returns the clients for proxy, reusing the last pair while the proxy stays the same,
-// since a transport pools its connections per proxy.
 func For(proxy string) *Clients {
 	mu.Lock()
 	defer mu.Unlock()
@@ -59,13 +54,11 @@ func transport(proxy string, noGzip bool) *http.Transport {
 
 func noProxy() string { return httpproxy.FromEnvironment().NoProxy }
 
-// CertRejected reports whether err is a TLS certificate failure.
 func CertRejected(err error) bool {
 	var cve *tls.CertificateVerificationError
 	return errors.As(err, &cve)
 }
 
-// Unreachable describes a request that never got an HTTP response.
 func Unreachable(baseURL, proxy string, err error) string {
 	if proxy == "" {
 		if CertRejected(err) {

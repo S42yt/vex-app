@@ -44,8 +44,6 @@ type posted struct {
 	Data      []byte  `json:"data"`
 }
 
-// A track at the contract maximum streams through with an exact Content-Length, decodes to
-// identical bytes, and allocates far less than its size.
 func TestStreamedUploadMaxSize(t *testing.T) {
 	path, want := writeRandom(t, "track.mp3", MaxAudioBytes)
 	spool := filepath.Join(t.TempDir(), "body.json")
@@ -107,8 +105,6 @@ func TestTooLargeRefusedBeforeReading(t *testing.T) {
 	}
 }
 
-// Confirmed uploads go out one at a time in confirm order, and each holds a Transfer token
-// from the moment it is queued.
 func TestConfirmQueue(t *testing.T) {
 	var mu sync.Mutex
 	var order []string
@@ -179,7 +175,6 @@ func TestClampTitle(t *testing.T) {
 	}
 }
 
-// The streamed upload body parses under the contract with no field ignored.
 func TestPostTrackContract(t *testing.T) {
 	path, _ := writeRandom(t, "track.mp3", 1000)
 	rec := &contracttest.Recorder{}

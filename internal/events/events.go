@@ -1,5 +1,3 @@
-// Package events registers every event Go pushes to the webview, so the binding
-// generator emits typed names and payloads for them.
 package events
 
 import "github.com/wailsapp/wails/v3/pkg/application"
@@ -18,7 +16,7 @@ type SessionExpiredData struct {
 
 type BinaryProgress struct {
 	Binary        string `json:"binary"`
-	Step          string `json:"step"` // "downloading" | "extracting"
+	Step          string `json:"step"`
 	ReceivedBytes int64  `json:"receivedBytes"`
 	TotalBytes    int64  `json:"totalBytes,omitempty"`
 	Part          int    `json:"part"`
@@ -44,7 +42,6 @@ func init() {
 	application.RegisterEvent[BinaryFailed](BinariesFailed)
 }
 
-// Emitter is the one method of *application.EventManager services need.
 type Emitter interface {
 	Emit(name string, data ...any) bool
 }

@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-// bin\ is shared by every channel, and busy.Registry only sees its own process.
-// Windows refuses to replace or delete an exe while it runs.
 func TestRunningExeCannotBeReplaced(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "yt-dlp.exe")
@@ -35,7 +33,6 @@ func TestRunningExeCannotBeReplaced(t *testing.T) {
 	}
 }
 
-// Holder process: takes the lock in the mode given by env, prints "held", waits for stdin EOF.
 func TestMain(m *testing.M) {
 	if mode := os.Getenv("BINLOCK_HOLD"); mode != "" {
 		release, err := LockBin(os.Getenv("BINLOCK_DIR"), mode == "exclusive", false)
@@ -69,7 +66,6 @@ func holder(t *testing.T, bin, mode string) (stop func()) {
 func TestBinLockAcrossProcesses(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "bin")
 
-	// Another channel is running yt-dlp: an install here is refused, a second run is allowed.
 	stop := holder(t, bin, "shared")
 	if _, err := LockBin(bin, true, false); !errors.Is(err, ErrBinBusy) {
 		t.Fatalf("install during another process's run: %v", err)
@@ -80,7 +76,6 @@ func TestBinLockAcrossProcesses(t *testing.T) {
 	}
 	rel()
 
-	// A waiting install proceeds once the other process lets go.
 	done := make(chan error, 1)
 	go func() {
 		rel, err := LockBin(bin, true, true)
@@ -99,14 +94,12 @@ func TestBinLockAcrossProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another channel is installing: a run here is refused.
 	stop = holder(t, bin, "exclusive")
 	if _, err := LockBin(bin, false, false); !errors.Is(err, ErrBinBusy) {
 		t.Fatalf("run during another process's install: %v", err)
 	}
 	stop()
 
-	// A crashed holder leaves no lock behind.
 	cmd := exec.Command(os.Args[0], "-test.run=^$")
 	cmd.Env = append(os.Environ(), "BINLOCK_HOLD=exclusive", "BINLOCK_DIR="+bin)
 	cmd.StdinPipe()

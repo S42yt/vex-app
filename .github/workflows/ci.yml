@@ -12,7 +12,6 @@ permissions: {}
 
 jobs:
   check:
-    # The Go code imports golang.org/x/sys/windows.
     runs-on: windows-latest
     defaults:
       run:
@@ -33,16 +32,13 @@ jobs:
 
       - run: bun install --frozen-lockfile
         working-directory: frontend
-      # go test runs contract/check.ts, so this install comes before the Go step.
       - run: bun install --frozen-lockfile
         working-directory: contract
 
-      # contract/tsconfig.json also covers scripts/.
       - name: Type-check contract and scripts
         run: bunx tsc --noEmit
         working-directory: contract
 
-      # tsc plus vite build; main.go embeds frontend/dist, so Go needs it too.
       - name: Build frontend
         run: bun run build
         working-directory: frontend
@@ -52,7 +48,6 @@ jobs:
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
           go test -race ./...
-          # The release build's tags; nothing above compiles the files behind them.
           go build -tags production,stable ./...
 
       - name: Generated files are current

@@ -1,6 +1,3 @@
-// Cuts a release: picks the next version, points a tag at main's current commit
-// and pushes it. Pushing that tag is the only thing that builds stable, so this
-// script is the whole release procedure. Run: bun scripts/release.ts
 import { $ } from "bun";
 import { setVersion, VERSION_FILES } from "./set-version";
 
@@ -25,8 +22,6 @@ if ((await run($`git status --porcelain`)).trim()) {
 
 await $`git fetch --quiet origin --tags`.quiet();
 
-// A tag on a commit origin has never seen points at nothing anyone can fetch,
-// so the release has to be reachable before it is named.
 const [ahead, behind] = (
 	await run($`git rev-list --left-right --count main...origin/main`)
 )
@@ -93,8 +88,6 @@ if (ahead || bumpsConfig) {
 }
 console.log(`    - tag ${tag} and push it, which builds and publishes a release`);
 
-// Declining is an answer, not a failure — exit clean so the shell doesn't
-// report an error for someone who simply changed their mind.
 if ((prompt(`\n  Release ${tag}? [y/N]:`) ?? "").trim().toLowerCase() !== "y") {
 	console.log("\n  Nothing was pushed.\n");
 	process.exit(0);

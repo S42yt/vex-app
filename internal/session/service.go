@@ -12,7 +12,6 @@ import (
 	"github.com/VexWave/vex-app/internal/netx"
 )
 
-// SessionService is bound: login, restore, logout and the proxy setting.
 type SessionService struct{ Store *Store }
 
 type LoginParams struct {
@@ -32,10 +31,8 @@ type ProxyParams struct {
 	ProxyURL string `json:"proxyUrl,omitempty"`
 }
 
-// probeTimeout bounds a proxy check, which otherwise waits as long as the proxy stalls.
 const probeTimeout = 30 * time.Second
 
-// Login returns the session token, which the webview saves to restore the login.
 func (s *SessionService) Login(ctx context.Context, p LoginParams) (string, error) {
 	s.Store.Logout()
 	c := &backend.Client{BaseURL: p.BaseURL, HTTP: netx.For(p.ProxyURL).API}
@@ -67,7 +64,6 @@ func (s *SessionService) SetProxy(ctx context.Context, p ProxyParams) error {
 	return err
 }
 
-// describe turns a transport error into the message the login screen shows.
 func describe(err error, baseURL, proxy string) error {
 	var f *backend.Failure
 	if err == nil || errors.As(err, &f) || errors.Is(err, context.Canceled) {
@@ -76,8 +72,6 @@ func describe(err error, baseURL, proxy string) error {
 	return &backend.Failure{Message: netx.Unreachable(baseURL, proxy, err)}
 }
 
-// MediaSession adapts the store for the media server: a 401 there has no call to
-// answer, so it expires the session and tells the webview.
 type MediaSession struct {
 	Store  *Store
 	Events events.Emitter

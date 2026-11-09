@@ -47,7 +47,6 @@ func ytdlp(t *testing.T) string {
 	return p
 }
 
-// Does killing yt-dlp.exe (what exec.CommandContext does) leave its worker running?
 func TestYtDlpKillLeavesChildren(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, ytdlp(t), "--encoding", "UTF-8", "--flat-playlist", "--print", "%(id)s", "ytsearch24:ambient music")
@@ -75,7 +74,6 @@ func TestYtDlpKillLeavesChildren(t *testing.T) {
 	}
 }
 
-// A kill-on-close job takes the whole tree down with its handle.
 func TestJobObjectKillsTree(t *testing.T) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {

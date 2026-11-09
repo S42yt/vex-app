@@ -29,10 +29,6 @@ export interface StartParams {
 
 export interface Step {
     "importId": string;
-
-    /**
-     * "starting" | "downloading" | "converting" | "staging"
-     */
     "step": string;
     "title"?: string;
     "receivedBytes"?: number;

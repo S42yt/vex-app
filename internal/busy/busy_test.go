@@ -7,15 +7,13 @@ import (
 	"testing"
 )
 
-// The 1:1 port: each component keeps its own flag, callers check, then act.
-// Safe on Bun's single thread; with one goroutine per Wails call it is not.
 func TestNaiveCheckThenActOverlaps(t *testing.T) {
 	var installing, importing atomic.Int32
 	var overlaps atomic.Int32
 	var wg sync.WaitGroup
 	for i := 0; i < 2000; i++ {
 		wg.Add(2)
-		go func() { // unlessInstalling(() => importer.start())
+		go func() {
 			defer wg.Done()
 			if installing.Load() == 0 {
 				runtime.Gosched()
@@ -26,7 +24,7 @@ func TestNaiveCheckThenActOverlaps(t *testing.T) {
 				importing.Add(-1)
 			}
 		}()
-		go func() { // ytDlpBusyReason() then binaryManager.update()
+		go func() {
 			defer wg.Done()
 			if importing.Load() == 0 {
 				runtime.Gosched()
@@ -91,7 +89,7 @@ func TestQuitBlocker(t *testing.T) {
 		t.Fatal("transfer did not block quit")
 	}
 	rel()
-	rel() // idempotent
+	rel()
 	if r.QuitBlocker() != "" || r.Held(Transfer) != 0 {
 		t.Fatal("release")
 	}

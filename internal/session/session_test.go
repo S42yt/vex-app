@@ -9,8 +9,6 @@ import (
 	"testing"
 )
 
-// Logins, logouts, proxy changes, 401 expiries and readers all at once.
-// Invariant: a proxy is only ever applied to the session it was probed against.
 func TestConcurrentSwaps(t *testing.T) {
 	var s Store
 	s.Restore(Session{"http://a", "t0", ""})
@@ -56,7 +54,7 @@ func TestExpireIgnoresNewerSession(t *testing.T) {
 	s.Restore(Session{"http://a", "old", ""})
 	stale, _ := s.Current()
 	s.Restore(Session{"http://a", "new", ""})
-	s.Expire(stale) // a late 401 from the old token
+	s.Expire(stale)
 	if cur, ok := s.Current(); !ok || cur.Token != "new" {
 		t.Fatal("a stale 401 logged out the new session")
 	}

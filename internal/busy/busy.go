@@ -1,5 +1,3 @@
-// Package busy replaces index.ts's ytDlpBusyReason/unlessInstalling/quitBusyReason
-// with one atomic check-and-acquire.
 package busy
 
 import (
@@ -23,7 +21,6 @@ var (
 	ErrYtDlpInUse = errors.New("yt-dlp is running — try again when it's done.")
 )
 
-// conflicts[k] lists kinds that must not be held while k is acquired.
 var conflicts = [numKinds][]Kind{
 	Import:  {Install},
 	Search:  {Install},
@@ -35,7 +32,6 @@ type Registry struct {
 	held [numKinds]int
 }
 
-// Acquire refuses if a conflicting kind is held; otherwise it holds k until release.
 func (r *Registry) Acquire(k Kind) (release func(), err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -56,7 +52,6 @@ func (r *Registry) Acquire(k Kind) (release func(), err error) {
 
 func (r *Registry) Held(k Kind) int { r.mu.Lock(); defer r.mu.Unlock(); return r.held[k] }
 
-// QuitBlocker returns why quitting now would cut something off, or "".
 func (r *Registry) QuitBlocker() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()

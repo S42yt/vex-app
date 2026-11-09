@@ -109,7 +109,6 @@ SectionEnd
 Section "uninstall" 
     !insertmacro wails.setShellContext
 
-    # Removes this channel's data, and the shared data when no other channel is installed.
     ExecWait '"$INSTDIR\${PRODUCT_EXECUTABLE}" --remove-data'
 
     RMDir /r $INSTDIR

@@ -67,7 +67,6 @@ function ReviewForm({
 }) {
 	const suggestion = item.suggestedArtist;
 	const [title, setTitle] = useState(item.title);
-	// Undefined is the cover Go extracted while staging.
 	const [coverBlob, setCoverBlob] = useState<Blob | null | undefined>();
 	const [linkArtist, setLinkArtist] = useState(true);
 	const [preview, setPreview] = useState<string | null>(null);

@@ -1,5 +1,3 @@
-// Writes the contract's bounds for both sides: internal/backend/limits_gen.go and
-// frontend/src/lib/limits.gen.ts. CI fails when either is out of date.
 import { z } from "zod";
 import * as C from "./contract";
 

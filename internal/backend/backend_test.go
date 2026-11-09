@@ -69,7 +69,6 @@ func TestRetryAfterDate(t *testing.T) {
 	}
 }
 
-// What arrives from the webview as {}, {cover: null} and {cover: "QUJD"} reaches the backend as absent, null and set.
 func TestNullableRoundTrip(t *testing.T) {
 	for in, want := range map[string]string{
 		`{"id":"a"}`:                 `{"id":"a"}`,
@@ -101,7 +100,6 @@ func TestImageVersion(t *testing.T) {
 	}
 }
 
-// Every JSON route, as the client really sends it, parses under the contract with no field ignored.
 func TestContract(t *testing.T) {
 	rec := &contracttest.Recorder{}
 	srv := httptest.NewServer(rec)

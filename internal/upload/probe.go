@@ -45,7 +45,6 @@ func tag(tags map[string]string, key string) string {
 	return ""
 }
 
-// probe reads title, duration and the attached picture with ffprobe and ffmpeg from bin.
 func probe(ctx context.Context, bin, path string) (probed, error) {
 	out, err := platform.Command(ctx, bin, filepath.Join(bin, "ffprobe.exe"),
 		"-v", "error", "-print_format", "json", "-show_format", "-show_streams", path).Output()

@@ -1,5 +1,3 @@
-// Package importer downloads a track from a URL with yt-dlp, one job at a time, and stages
-// the result for upload.
 package importer
 
 import (
@@ -27,8 +25,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// The import events live here rather than in events: their payload carries upload.Staged,
-// and upload already depends on events through session.
 const (
 	Progress = "import:progress"
 	Staged   = "import:staged"
@@ -37,7 +33,7 @@ const (
 
 type Step struct {
 	ImportID      string `json:"importId"`
-	Step          string `json:"step"` // "starting" | "downloading" | "converting" | "staging"
+	Step          string `json:"step"`
 	Title         string `json:"title,omitempty"`
 	ReceivedBytes int64  `json:"receivedBytes,omitempty"`
 	TotalBytes    int64  `json:"totalBytes,omitempty"`
@@ -86,16 +82,13 @@ var (
 	reUUID       = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 )
 
-// ImportService is bound. Jobs run one at a time on a worker started with the app.
 type ImportService struct {
-	Dir    string // VexWaveData\<channel>\imports
+	Dir    string
 	Bin    string
 	Busy   *busy.Registry
 	Proxy  func() string
 	Events events.Emitter
-	// Stage hands a finished file to the upload review; staged files are deleted once
-	// uploaded or discarded.
-	Stage func(ctx context.Context, path string) (upload.Staged, error)
+	Stage  func(ctx context.Context, path string) (upload.Staged, error)
 
 	jobs chan job
 }
@@ -105,8 +98,6 @@ type job struct {
 	release func()
 }
 
-// ServiceStartup clears what an earlier run left behind and starts the worker, which ends
-// with ctx when the app shuts down.
 func (s *ImportService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
 	if entries, err := os.ReadDir(s.Dir); err == nil {
 		for _, e := range entries {
@@ -125,8 +116,6 @@ type StartParams struct {
 	URL      string `json:"url"`
 }
 
-// Start queues a job. Its Import token is held from now until the job ends, so installs and
-// quitting see queued jobs too.
 func (s *ImportService) Start(p StartParams) error {
 	if !reUUID.MatchString(p.ImportID) {
 		return errors.New("Invalid import id.")
@@ -276,7 +265,6 @@ func (s *ImportService) download(ctx context.Context, j job) (path, title string
 	return path, title, artist, nil
 }
 
-// channelAvatar looks up a YouTube channel's picture, or returns nil.
 func (s *ImportService) channelAvatar(ctx context.Context, channelURL string) *Artist {
 	about := aboutURL(channelURL)
 	if about == "" {
@@ -331,7 +319,6 @@ func aboutURL(channelURL string) string {
 	return u.String()
 }
 
-// pickAvatar prefers YouTube's uncropped avatar, else the largest square thumbnail.
 func pickAvatar(raw string) string {
 	var thumbs []struct {
 		ID     string  `json:"id"`

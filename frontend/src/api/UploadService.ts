@@ -40,7 +40,6 @@ export interface UploadState {
 export interface ConfirmEdits {
 	title: string;
 	artistIds: number[];
-	// Undefined keeps the staged cover; null drops it.
 	coverBlob?: Blob | null;
 }
 
@@ -156,7 +155,6 @@ export class UploadService extends Store<UploadState> {
 		if (this.staged.length === 0) this.reviewedCount = 0;
 	}
 
-	// Go queues confirmed uploads and sends them one at a time.
 	private async upload(
 		item: UploadItem,
 		staged: StagedUpload,

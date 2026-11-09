@@ -1,31 +1,22 @@
 name: Build (Windows)
 
-# A tag is the only thing that ships, so it is the only thing that builds by
-# itself. A manual run builds the same stable installer without publishing it.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
 
-# Any job starts with no token scope and must ask for what it needs.
 permissions: {}
 
 jobs:
   build:
     runs-on: windows-latest
 
-    # For the release step; the default token is read-only.
     permissions:
       contents: write
 
     steps:
-      # Third-party actions are pinned to commit SHAs, not tags. A tag is mutable:
-      # whoever controls the action repo can repoint it, and that is how the
-      # tj-actions/changed-files compromise reached every workflow at once.
-      # Bump these deliberately; the trailing comment is the version.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # Nothing here pushes; don't leave a usable token in .git/config.
           persist-credentials: false
 
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
@@ -44,8 +35,6 @@ jobs:
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
           "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
-      # The exe's version resource is what the updater compares, so a release
-      # carries its tag's version even if the bump commit was skipped.
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: bun scripts/set-version.ts ${{ github.ref_name }}
@@ -53,11 +42,8 @@ jobs:
       - run: bun install --frozen-lockfile
         working-directory: frontend
 
-      # Builds the stable-channel exe into bin/, then the per-user NSIS installer beside it.
       - run: wails3 task package EXTRA_TAGS=stable
 
-      # The updater's default matcher picks VexWave-windows-amd64.exe and checks
-      # it against SHA256SUMS; the installer is for first installs.
       - name: Name the release assets
         shell: bash
         run: |

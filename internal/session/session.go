@@ -1,4 +1,3 @@
-// Package session holds the login: an immutable Session behind atomic.Pointer, swapped whole.
 package session
 
 import (
@@ -22,10 +21,8 @@ func (s *Store) Current() (*Session, bool) { p := s.cur.Load(); return p, p != n
 func (s *Store) Restore(v Session)         { s.cur.Store(&v) }
 func (s *Store) Logout()                   { s.cur.Store(nil) }
 
-// Expire drops the session only if it is still the one that got the 401.
 func (s *Store) Expire(seen *Session) bool { return s.cur.CompareAndSwap(seen, nil) }
 
-// Proxy is the current session's proxy, or "" while logged out.
 func (s *Store) Proxy() string {
 	if p := s.cur.Load(); p != nil {
 		return p.Proxy
@@ -33,7 +30,6 @@ func (s *Store) Proxy() string {
 	return ""
 }
 
-// BaseURL is the current session's backend, or "" while logged out.
 func (s *Store) BaseURL() string {
 	if p := s.cur.Load(); p != nil {
 		return p.BaseURL
@@ -41,7 +37,6 @@ func (s *Store) BaseURL() string {
 	return ""
 }
 
-// SetProxy probes with the new proxy, then swaps it in only if no login/logout happened meanwhile.
 func (s *Store) SetProxy(ctx context.Context, proxy string, probe func(context.Context, Session) error) error {
 	old := s.cur.Load()
 	if old == nil {
@@ -62,7 +57,6 @@ func (v *Session) client() *backend.Client {
 	return &backend.Client{BaseURL: v.BaseURL, Token: v.Token, HTTP: netx.For(v.Proxy).API}
 }
 
-// With runs fn against the current session's backend and drops that session on a 401.
 func (s *Store) With(fn func(*backend.Client) error) error {
 	cur, ok := s.Current()
 	if !ok {

@@ -86,7 +86,6 @@ export const CoverBackdrop = memo(function CoverBackdrop({
 							src={layer.url}
 							alt=""
 							ref={(el) => {
-								// An already-decoded image may never fire load where React can hear it.
 								if (!el?.complete || layer.loaded) return;
 								settle(layer.id);
 							}}

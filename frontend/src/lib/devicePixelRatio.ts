@@ -1,5 +1,3 @@
-// There is no DPR change event: the idiom is a media query pinned to the
-// current ratio, which can then only stop matching, re-armed each time it fires.
 export function watchDevicePixelRatio() {
 	let query: MediaQueryList | null = null;
 	let published: number | null = null;

@@ -44,8 +44,6 @@ func (h host) wait(t *testing.T, name string) {
 	}
 }
 
-// fakeGitHub serves a release with the bare exe the default matcher picks, its SHA256SUMS
-// and the NSIS installer; tamper corrupts the checksum.
 func fakeGitHub(t *testing.T, tag string, tamper bool) (*httptest.Server, *atomic.Int32, []byte) {
 	payload := bytes.Repeat([]byte("MZ new binary "), 1000)
 	sum := sha256.Sum256(payload)

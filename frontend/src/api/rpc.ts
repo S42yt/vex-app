@@ -46,9 +46,6 @@ import type {
 	YtDlpUpdate,
 } from "./types";
 
-// The bound Go services, one entry per service and method. A call resolves with Go's return
-// value and rejects with Go's error (see failureOf). The generator can't express the
-// frontend's stricter types (unions, non-null slices, absent-or-null), so they are stated here.
 interface Backend {
 	Session: {
 		Login(p: LoginParams): Promise<string>;
@@ -115,7 +112,6 @@ export const backend = {
 	Uninstall,
 } as unknown as Backend;
 
-// A Go error rejects with its message, and its JSON form in `cause`.
 export function failureOf(e: unknown): Failure {
 	const cause = (e as { cause?: Omit<Failure, "error"> }).cause;
 	return {
@@ -126,7 +122,6 @@ export function failureOf(e: unknown): Failure {
 	};
 }
 
-// Wails' updater emits the last three itself (wails:v3/pkg/updater/events.go).
 export const Event = {
 	...EventNames,
 	UpdateProgress: "wails:updater:download-progress",

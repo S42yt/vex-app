@@ -1,8 +1,6 @@
 import type { ReactNode } from "react";
 import type { SearchSource } from "@/api/types";
 
-// Colours are whole class names, not hex in a style: Tailwind only generates
-// what it can read in the source.
 export const PLATFORMS: Record<
 	SearchSource,
 	{

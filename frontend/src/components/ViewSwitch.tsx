@@ -24,8 +24,6 @@ export function ViewSwitch() {
 	);
 }
 
-// Width and offset are inline styles because they follow the section count,
-// which Tailwind can only generate classes for if it can read it in the source.
 function Marker({ index }: { index: number }) {
 	const share = `${100 / SECTION_ORDER.length}%`;
 	return (

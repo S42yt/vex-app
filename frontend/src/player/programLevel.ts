@@ -52,8 +52,6 @@ export async function measureProgramLevel(
 		}
 		const bytes = await response.arrayBuffer();
 		if (signal.aborted) return null;
-		// An OfflineAudioContext decodes without a user gesture and without touching
-		// the context the track plays through, which may not exist yet.
 		decoder ??= new OfflineAudioContext(1, 1, DECODE_RATE);
 		const buffer = await decoder.decodeAudioData(bytes);
 		const level = loudestBlock(buffer);

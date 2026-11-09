@@ -72,7 +72,6 @@ func TestRefusedWhileInstalling(t *testing.T) {
 	}
 }
 
-// Overlapping searches: each either completes or is superseded, and nothing is left behind.
 func TestStorm(t *testing.T) {
 	s := service(t)
 	var wg sync.WaitGroup

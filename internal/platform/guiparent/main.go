@@ -1,5 +1,3 @@
-// GUI-subsystem parent (built with -H windowsgui, like a Wails app) spawning a console child
-// plainly and through platform.Command.
 package main
 
 import (

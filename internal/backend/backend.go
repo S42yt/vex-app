@@ -1,4 +1,3 @@
-// Package backend is the client for contract/contract.ts.
 package backend
 
 import (
@@ -18,7 +17,6 @@ import (
 	"github.com/VexWave/vex-app/internal/netx"
 )
 
-// Failure is what a bound call rejects with; the frontend reads it as an RpcFailure.
 type Failure struct {
 	Status        int    `json:"status,omitempty"`
 	RetryAfterSec int    `json:"retryAfterSec,omitempty"`
@@ -29,7 +27,6 @@ func (f *Failure) Error() string { return f.Message }
 
 var ErrNotLoggedIn = &Failure{Status: http.StatusUnauthorized, Message: "Not logged in"}
 
-// Payload names what a request carries, for the 413 message.
 type Payload int
 
 const (
@@ -43,14 +40,11 @@ type Client struct {
 	HTTP           *http.Client
 }
 
-// Stream is a JSON request body that is already encoded, sent as is with its exact length.
 type Stream struct {
 	Reader io.Reader
 	Len    int64
 }
 
-// Do sends one request. A non-2xx answer becomes a *Failure (fallback names it when the
-// server sends no plain-text reason); a transport error is returned as is.
 func (c *Client) Do(ctx context.Context, method, path string, body, out any, fallback string, payload Payload) error {
 	var rd io.Reader
 	var length int64
@@ -94,7 +88,6 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any, fal
 	return failure(res, fmt.Sprintf("%s (HTTP %d)", fallback, res.StatusCode), payload)
 }
 
-// call is Do for the authenticated routes: a transport error reads "<what> failed — server unreachable".
 func (c *Client) call(ctx context.Context, what, method, path string, body, out any, payload Payload) error {
 	err := c.Do(ctx, method, path, body, out, what+" failed", payload)
 	var f *Failure
@@ -129,7 +122,6 @@ func failure(res *http.Response, fallback string, payload Payload) *Failure {
 	return f
 }
 
-// The backend's own messages are text/plain; proxies in the way answer with HTML pages.
 func errorText(res *http.Response, fallback string) string {
 	if !strings.HasPrefix(res.Header.Get("Content-Type"), "text/plain") {
 		return fallback
@@ -141,7 +133,6 @@ func errorText(res *http.Response, fallback string) string {
 	return string(b)
 }
 
-// retryAfter reads both forms RFC 9110 allows: delay-seconds and an HTTP-date.
 func retryAfter(v string, now time.Time) int {
 	if v == "" {
 		return 0
@@ -172,8 +163,6 @@ func plural(n int, unit string) string {
 	return strconv.Itoa(n) + " " + unit + "s"
 }
 
-// Path builders, as contract.ts's trackAudioPath and *ImagePath.
-
 func TrackAudioPath(id string) string { return "/track/" + url.PathEscape(id) + "/audio" }
 
 func TrackImagePath(id, version string) string {
@@ -195,7 +184,6 @@ func versionQuery(v string) string {
 	return "?v=" + url.QueryEscape(v)
 }
 
-// ImageVersion reads the `v` query a backend image URL pins its content hash with.
 func ImageVersion(u string) string {
 	_, q, ok := strings.Cut(u, "?")
 	if !ok {

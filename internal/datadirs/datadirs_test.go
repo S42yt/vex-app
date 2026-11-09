@@ -35,7 +35,6 @@ func populate(t *testing.T) Layout {
 
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-// Fake Uninstall keys under a throwaway HKCU path, removed afterwards.
 func testKeys(t *testing.T) (path string, install func(name string), uninstall func(name string)) {
 	path = fmt.Sprintf(`Software\VexWavePortTest-%d\Uninstall`, os.Getpid())
 	t.Cleanup(func() {
@@ -74,7 +73,7 @@ func TestLayout(t *testing.T) {
 func TestInstalledReadsHKCU(t *testing.T) {
 	path, install, _ := testKeys(t)
 	install("VexWave")
-	k, _, _ := registry.CreateKey(registry.CURRENT_USER, path+`\VexWave Canary`, registry.SET_VALUE) // key without UninstallString
+	k, _, _ := registry.CreateKey(registry.CURRENT_USER, path+`\VexWave Canary`, registry.SET_VALUE)
 	k.Close()
 	for key, want := range map[string]bool{"VexWave": true, "VexWave Canary": false, "absent": false} {
 		got, err := Installed(registry.CURRENT_USER, path, key)
@@ -82,13 +81,11 @@ func TestInstalledReadsHKCU(t *testing.T) {
 			t.Errorf("%s: got %v, %v; want %v", key, got, err, want)
 		}
 	}
-	// The real Uninstall path is readable without elevation.
 	if got, err := Installed(registry.CURRENT_USER, UninstallPath, "VexWave-port-test-absent"); got || err != nil {
 		t.Fatalf("real path: %v %v", got, err)
 	}
 }
 
-// Uninstall canary while stable is installed, then stable as the last channel.
 func TestUninstallRule(t *testing.T) {
 	path, install, uninstall := testKeys(t)
 	l := populate(t)
@@ -96,7 +93,7 @@ func TestUninstallRule(t *testing.T) {
 	install("VexWave")
 	install("VexWave Canary")
 
-	uninstall("VexWave Canary") // NSIS removes its own key; order relative to RemoveData doesn't matter
+	uninstall("VexWave Canary")
 	if err := l.RemoveData("canary", others("canary"), check); err != nil {
 		t.Fatal(err)
 	}

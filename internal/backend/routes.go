@@ -6,8 +6,7 @@ import (
 	"net/http"
 )
 
-// Nullable keeps the contract's edit rule: a null image removes it, an absent one leaves it.
-// Tag it `omitzero` so an unset value stays out of the JSON.
+// Needs `omitzero` on the field, so an unset value stays out of the JSON.
 type Nullable[T any] struct {
 	Set, Null bool
 	V         T
@@ -76,9 +75,8 @@ func (c *Client) Data(ctx context.Context) (*Data, error) {
 }
 
 type EditTrack struct {
-	ID    string `json:"id"`
-	Title string `json:"title,omitempty"`
-	// nil leaves the links; an empty slice clears them.
+	ID        string           `json:"id"`
+	Title     string           `json:"title,omitempty"`
 	ArtistIDs *[]int32         `json:"artistIds,omitempty"`
 	Cover     Nullable[string] `json:"cover,omitzero"`
 }
@@ -101,9 +99,8 @@ type PostPlaylist struct {
 }
 
 type EditPlaylist struct {
-	ID   int32  `json:"id"`
-	Name string `json:"name,omitempty"`
-	// nil leaves the list; an empty slice clears it.
+	ID       int32            `json:"id"`
+	Name     string           `json:"name,omitempty"`
 	TrackIDs *[]string        `json:"trackIds,omitempty"`
 	Image    Nullable[string] `json:"image,omitzero"`
 }

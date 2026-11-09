@@ -7,9 +7,6 @@ export interface SaveParams {
     "startingFolder"?: string;
 }
 
-/**
- * Saved is empty when the folder dialog was cancelled.
- */
 export interface Saved {
     "path"?: string;
     "folder"?: string;

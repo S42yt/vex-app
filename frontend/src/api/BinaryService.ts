@@ -132,7 +132,6 @@ export class BinaryService extends Store<BinariesState> {
 		this.update({ updateDismissed: true });
 	}
 
-	// While the first install runs, events are about it; afterwards they are a yt-dlp update's.
 	private get installing(): boolean {
 		return this.snapshot.phase === "installing";
 	}

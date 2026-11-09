@@ -70,8 +70,6 @@ function buildDrive(context: AudioContext, input: AudioNode): DriveGraph {
 	shelf.type = "lowshelf";
 	shelf.frequency.value = SHELF_HZ;
 	const shaper = context.createWaveShaper();
-	// Harmonics thrown past half the sample rate fold back down as tones belonging
-	// to no note in the track.
 	shaper.oversample = "4x";
 	const post = context.createGain();
 	input.connect(shelf).connect(shaper).connect(post);
@@ -118,7 +116,6 @@ export class Drive implements GraphStage {
 	private writeLevels(graph: DriveGraph, write: ParamWriter): void {
 		write(graph.shelf.gain, MAX_SHELF_DB * this.amount);
 		if (this.amount === 0) {
-			// No curve is the pass-through the spec gives a WaveShaper.
 			graph.shaper.curve = null;
 			graph.post.gain.value = 1;
 			return;

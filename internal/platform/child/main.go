@@ -1,4 +1,3 @@
-// Console-subsystem child: reports whether Windows gave it a visible console window.
 package main
 
 import (

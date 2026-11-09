@@ -1,4 +1,3 @@
-// Package ytdlptest builds a fake yt-dlp.exe (./fake) for tests of the code that runs it.
 package ytdlptest
 
 import (
@@ -8,7 +7,6 @@ import (
 	"testing"
 )
 
-// Bin returns a fresh bin folder holding the fake yt-dlp.exe.
 func Bin(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

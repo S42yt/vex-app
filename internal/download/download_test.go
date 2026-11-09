@@ -43,7 +43,6 @@ func TestFailedSaveLeavesNoFile(t *testing.T) {
 	}
 }
 
-// The whole path stays under MAX_PATH in UTF-16 units, with room for " (100)".
 func TestFitName(t *testing.T) {
 	dir := `C:\` + strings.Repeat("d", 197)
 	got := fitName(dir, strings.Repeat("😀", 100), ".mp3")

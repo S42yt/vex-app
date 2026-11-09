@@ -36,7 +36,6 @@ func fetch(t *testing.T, c *http.Client, u string) *http.Response {
 	return res
 }
 
-// Default Transport offers gzip on its own and then hides it: Content-Length gone, body decoded.
 func TestDefaultTransportAddsGzip(t *testing.T) {
 	be, srv := gzipBackend()
 	defer srv.Close()
@@ -66,7 +65,6 @@ func TestDisableCompression(t *testing.T) {
 	}
 }
 
-// A Range request never gets auto-gzip from Go, even with compression enabled.
 func TestRangeRequestsSkipAutoGzip(t *testing.T) {
 	be, srv := gzipBackend()
 	defer srv.Close()
@@ -85,7 +83,6 @@ func TestRangeRequestsSkipAutoGzip(t *testing.T) {
 
 func mustURL(s string) *url.URL { u, _ := url.Parse(s); return u }
 
-// http.ProxyURL ignores NO_PROXY; httpproxy.Config honours it (and always bypasses loopback).
 func TestNoProxy(t *testing.T) {
 	proxy := mustURL("http://proxy.corp:8080")
 	targets := []string{"https://music.internal.corp/x", "https://example.com/x", "http://127.0.0.1:5000/x", "http://localhost:5000/x"}
@@ -113,7 +110,6 @@ func TestNoProxy(t *testing.T) {
 	}
 }
 
-// What a proxy's 407 looks like to Go for http:// and https:// targets.
 func TestProxy407(t *testing.T) {
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Proxy-Authenticate", `Basic realm="corp"`)
@@ -139,7 +135,6 @@ func TestProxy407(t *testing.T) {
 	}
 }
 
-// Certificate failures arrive as typed errors.
 func TestCertErrorsTyped(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
@@ -150,7 +145,6 @@ func TestCertErrorsTyped(t *testing.T) {
 		t.Fatalf("got %T %v", err, err)
 	}
 
-	// Hostname mismatch: the httptest cert covers 127.0.0.1 and example.com, not localhost.
 	pool := x509.NewCertPool()
 	pool.AddCert(srv.Certificate())
 	c := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}}
@@ -162,7 +156,6 @@ func TestCertErrorsTyped(t *testing.T) {
 	}
 }
 
-// http.ParseTime reads the HTTP-date form of Retry-After.
 func TestRetryAfterDate(t *testing.T) {
 	when := time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat)
 	at, err := http.ParseTime(when)
@@ -174,7 +167,6 @@ func TestRetryAfterDate(t *testing.T) {
 	}
 }
 
-// Transport.OnProxyConnectResponse turns a CONNECT 407 into a typed error.
 func TestProxy407Typed(t *testing.T) {
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusProxyAuthRequired)

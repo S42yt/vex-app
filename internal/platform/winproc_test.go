@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// A GUI-subsystem Go binary gets a console window per console child unless CREATE_NO_WINDOW is set.
 func TestConsoleWindowForChildren(t *testing.T) {
 	dir := t.TempDir()
 	child, parent := filepath.Join(dir, "child.exe"), filepath.Join(dir, "parent.exe")
@@ -28,7 +27,6 @@ func TestConsoleWindowForChildren(t *testing.T) {
 	}
 }
 
-// os.Rename replaces an existing target on Windows (MoveFileEx with REPLACE_EXISTING).
 func TestRenameReplaces(t *testing.T) {
 	dir := t.TempDir()
 	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")

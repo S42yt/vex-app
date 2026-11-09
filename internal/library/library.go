@@ -1,4 +1,3 @@
-// Package library is the bound service for the library's reads and edits.
 package library
 
 import (
@@ -8,7 +7,6 @@ import (
 	"github.com/VexWave/vex-app/internal/session"
 )
 
-// URLs are the media server's loopback addresses, which the webview loads instead of the backend's.
 type URLs interface {
 	TrackURL(id string) string
 	TrackImageURL(id, version string) string

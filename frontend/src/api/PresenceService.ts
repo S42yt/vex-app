@@ -58,7 +58,6 @@ export class PresenceService extends Store<PresenceState> {
 		}
 	}
 
-	// A status event can overtake the reply to an earlier SetEnabled; the newest number wins.
 	private take({ seq, ...status }: NumberedPresenceStatus): void {
 		if (seq <= this.seq) return;
 		this.seq = seq;

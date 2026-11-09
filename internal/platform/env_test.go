@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-// The bin dir must come first even though a GUI launch inherits "Path", not "PATH".
 func TestCommandPutsBinFirst(t *testing.T) {
 	out, err := Command(context.Background(), `C:\vexwave-bin`, "cmd", "/c", "echo %PATH%").Output()
 	if err != nil {

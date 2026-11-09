@@ -15,10 +15,6 @@ export interface BinaryInstalled {
 
 export interface BinaryProgress {
     "binary": string;
-
-    /**
-     * "downloading" | "extracting"
-     */
     "step": string;
     "receivedBytes": number;
     "totalBytes"?: number;

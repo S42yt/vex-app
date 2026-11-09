@@ -68,8 +68,6 @@ interface LibraryViewState {
 	error: string | null;
 }
 
-// A store derived from the library: rebuilt when its sources change, with a failed
-// mutation's error standing until the next load.
 export abstract class LibraryView<S extends LibraryViewState> extends Store<S> {
 	private mutationError: string | null = null;
 	private builtFrom: readonly unknown[];

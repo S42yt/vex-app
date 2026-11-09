@@ -38,7 +38,6 @@ const (
 	notTheTrackPen   = 3
 )
 
-// matcher is a regexp, or code where RE2 can't express the JS pattern.
 type matcher func(string) bool
 
 func re(p string) matcher { return regexp.MustCompile(p).MatchString }
@@ -81,7 +80,6 @@ var reOfficial = regexp.MustCompile(`\bofficial\b`)
 
 var stripMarks = runes.Remove(runes.In(unicode.M))
 
-// Tokens are []rune: lengths and edit distance count code points.
 func tokenize(text string) [][]rune {
 	s, _, _ := transform.String(transform.Chain(norm.NFD, stripMarks), fold.String(text))
 	s = strings.Map(func(r rune) rune {

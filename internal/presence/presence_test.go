@@ -15,11 +15,9 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// fakeDiscord serves Discord's IPC framing on a named pipe of its own.
 type fakeDiscord struct {
 	prefix string
 	ln     net.Listener
-	// refuse answers every SET_ACTIVITY with an ERROR, as Discord does with activity privacy on.
 	refuse bool
 
 	mu    sync.Mutex
@@ -40,7 +38,6 @@ func newFakeDiscord(t *testing.T, refuse bool) *fakeDiscord {
 	return d
 }
 
-// listen serves on index 3, so the client has to sweep past absent pipes to find it.
 func (d *fakeDiscord) listen(t *testing.T) {
 	ln, err := winio.ListenPipe(d.prefix+"3", nil)
 	if err != nil {
@@ -100,7 +97,6 @@ func (d *fakeDiscord) snapshot() []sent {
 	return append([]sent(nil), d.sends...)
 }
 
-// kick ends the client's connection, as quitting Discord does.
 func (d *fakeDiscord) kick() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -149,8 +145,6 @@ func play(p *PresenceService, tr *Track) {
 	p.SetNowPlaying(context.Background(), NowPlaying{Track: tr})
 }
 
-// Bursts of track changes from many goroutines: sends stay at least the floor apart, and the
-// last track wins. Every send also proves a write isn't stuck behind the pending read.
 func TestDebounceFloorAndLastWins(t *testing.T) {
 	d := newFakeDiscord(t, false)
 	p, st := start(t, d, "https://music.example.com")
@@ -219,7 +213,7 @@ func TestReconnectsAfterDiscordQuits(t *testing.T) {
 	if s := enable(t, p, false); s.Connection != "offline" {
 		t.Fatal("still connected after disable")
 	}
-	for i := range 50 { // concurrent toggles and track changes
+	for i := range 50 {
 		go p.SetEnabled(context.Background(), EnableParams{Enabled: i%2 == 0})
 		go play(p, nil)
 	}

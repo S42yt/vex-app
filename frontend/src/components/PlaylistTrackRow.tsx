@@ -88,8 +88,6 @@ export const PlaylistTrackRow = memo(function PlaylistTrackRow({
 							"-mr-1.5 flex h-7 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 							isDragging && "cursor-grabbing text-foreground",
 						)}
-						// The row plays on click; a grip pressed but not dragged must not count
-						// as one.
 						onClick={(e) => e.stopPropagation()}
 						{...attributes}
 						{...listeners}

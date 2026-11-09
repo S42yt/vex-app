@@ -1,5 +1,3 @@
-// Radix's ContextMenuTrigger listens for contextmenu, so a left-click on the
-// kebab synthesizes one anchored at the button.
 export function openRowMenu(button: HTMLElement) {
 	const rect = button.getBoundingClientRect();
 	button.dispatchEvent(

@@ -9,16 +9,9 @@ export interface ConfirmParams {
     "stagedId": string;
     "title": string;
     "artistIds": number[] | null;
-
-    /**
-     * Absent keeps the staged cover; null drops it.
-     */
     "coverBase64"?: backend$0.Nullable<string>;
 }
 
-/**
- * Staged is a file waiting for the review dialog, or one refused with Error.
- */
 export interface Staged {
     "id": string;
     "fileName": string;

@@ -1,4 +1,3 @@
-// Package download saves a library track to a folder the user picks.
 package download
 
 import (
@@ -18,12 +17,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Tracks is the media server: the cache, the shared download, or the backend.
 type Tracks interface {
 	Reader(ctx context.Context, id string) (io.ReadCloser, error)
 }
 
-// DownloadService is bound.
 type DownloadService struct {
 	Busy   *busy.Registry
 	Tracks Tracks
@@ -35,7 +32,6 @@ type SaveParams struct {
 	StartingFolder string `json:"startingFolder,omitempty"`
 }
 
-// Saved is empty when the folder dialog was cancelled.
 type Saved struct {
 	Path   string `json:"path,omitempty"`
 	Folder string `json:"folder,omitempty"`
@@ -74,8 +70,7 @@ func (d *DownloadService) SaveTrack(ctx context.Context, p SaveParams) (Saved, e
 	return Saved{Path: path, Folder: dir}, nil
 }
 
-// startFolder is the remembered folder while it still exists, else the home folder: Wails'
-// dialog fails without opening when its start folder is gone.
+// Wails' dialog fails without opening when its start folder is gone.
 func startFolder(remembered string) string {
 	if fi, err := os.Stat(remembered); remembered != "" && err == nil && fi.IsDir() {
 		return remembered
@@ -105,7 +100,6 @@ func save(r io.Reader, dir, name string) (string, error) {
 
 const maxNameAttempts = 100
 
-// create takes the first free "name.ext", "name (2).ext", … without a check-then-write race.
 func create(dir, base, ext string) (*os.File, error) {
 	for n := 1; n <= maxNameAttempts; n++ {
 		name := base + ext
@@ -121,9 +115,7 @@ func create(dir, base, ext string) (*os.File, error) {
 }
 
 const (
-	// Under Windows' MAX_PATH of 260, counted in UTF-16 units.
 	maxPathUnits = 250
-	// What most file systems allow one path component, in bytes.
 	maxNameBytes = 255
 	suffixLen    = len(" (100)")
 )
@@ -154,7 +146,6 @@ func utf16Len(s string) int {
 	return n
 }
 
-// SafeName replaces the characters Windows refuses in a file name.
 func SafeName(name, fallback string) string {
 	cleaned := strings.TrimSpace(strings.Map(func(r rune) rune {
 		if r < 0x20 || strings.ContainsRune(`\/:*?"<>|`, r) {

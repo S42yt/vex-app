@@ -1,5 +1,3 @@
-// Package presence shows the playing track as Discord Rich Presence. One actor goroutine owns
-// the pipe, the state and every timer; bound calls talk to it through channels.
 package presence
 
 import (
@@ -23,8 +21,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// A real application id from https://discord.com/developers/applications: its name is what
-// Discord prints as "Listening to ...", and its art assets are what logoAsset resolves against.
 const applicationID = "1533078418541908019"
 
 const (
@@ -33,8 +29,7 @@ const (
 	maxFrameBytes     = 1 << 20
 	maxPipeIndex      = 9
 	busyPipeWait      = 500 * time.Millisecond
-	// Discord rejects details/state outside this length.
-	minText, maxText = 2, 128
+	minText, maxText  = 2, 128
 )
 
 const (
@@ -64,24 +59,20 @@ type Refusal struct {
 }
 
 type Status struct {
-	Connection string   `json:"connection"` // "offline" | "connected" | "refused"
+	Connection string   `json:"connection"`
 	Refusal    *Refusal `json:"refusal,omitempty"`
-	// Seq orders replies and events: they reach the webview by different paths, so an event
-	// can arrive before the reply to a call made earlier.
-	Seq uint64 `json:"seq"`
+	Seq        uint64   `json:"seq"`
 }
 
 const StatusEvent = "presence:status"
 
 func init() { application.RegisterEvent[Status](StatusEvent) }
 
-// PresenceService is bound.
 type PresenceService struct {
-	Events events.Emitter
-	// BaseURL is the logged-in backend, whose cover URLs Discord can fetch if it's public.
+	Events  events.Emitter
 	BaseURL func() string
 
-	pipePrefix string // tests point this at their own fake Discord
+	pipePrefix string
 	timing     timing
 	enable     chan enableReq
 	playing    chan *Track
@@ -108,7 +99,6 @@ type EnableParams struct {
 	Enabled bool `json:"enabled"`
 }
 
-// SetEnabled is a request: it returns the connection state it leaves behind.
 func (p *PresenceService) SetEnabled(ctx context.Context, e EnableParams) (Status, error) {
 	r := enableReq{e.Enabled, make(chan Status, 1)}
 	select {
@@ -134,7 +124,7 @@ type frame struct {
 	conn io.ReadWriteCloser
 	op   uint32
 	body []byte
-	err  error // the read loop ended
+	err  error
 }
 
 type message struct {
@@ -244,7 +234,7 @@ func (p *PresenceService) loop(ctx context.Context) {
 			handshake.Reset(p.timing.handshake)
 		case f := <-frames:
 			if f.conn != conn {
-				continue // from a pipe already dropped
+				continue
 			}
 			switch {
 			case f.err != nil || f.op == opClose:
@@ -298,10 +288,8 @@ func (p *PresenceService) loop(ctx context.Context) {
 	}
 }
 
-// dial tries each Discord pipe in turn; nil means no Discord is listening.
 func (p *PresenceService) dial(ctx context.Context) io.ReadWriteCloser {
 	for i := 0; i <= maxPipeIndex; i++ {
-		// A busy pipe counts as absent once this runs out; a missing one fails at once.
 		ctx, cancel := context.WithTimeout(ctx, busyPipeWait)
 		c, err := winio.DialPipeContext(ctx, fmt.Sprint(p.pipePrefix, i))
 		cancel()
@@ -376,7 +364,6 @@ func (p *PresenceService) coverURL(t *Track) string {
 	return base + backend.TrackImagePath(t.ID, "")
 }
 
-// publiclyRoutable says whether Discord's servers could fetch from baseURL.
 func publiclyRoutable(baseURL string) bool {
 	u, err := url.Parse(baseURL)
 	if err != nil {

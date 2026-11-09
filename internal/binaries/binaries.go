@@ -1,5 +1,3 @@
-// Package binaries installs and updates the managed tools in VexWaveData\bin: yt-dlp,
-// ffmpeg/ffprobe and deno.
 package binaries
 
 import (
@@ -90,13 +88,11 @@ func (m *manifest) has(n Name) bool {
 	}
 }
 
-// BinaryService is bound. Installs run in the background and report through binaries:* events.
 type BinaryService struct {
 	Bin    string
 	Busy   *busy.Registry
 	Events events.Emitter
-	// Proxy is the current session's proxy, for runs the webview starts without naming one.
-	Proxy func() string
+	Proxy  func() string
 }
 
 type Status struct {
@@ -133,8 +129,6 @@ type ProxyParams struct {
 	ProxyURL string `json:"proxyUrl,omitempty"`
 }
 
-// InstallMissingBinaries waits for another VexWave window to finish with the tools: it runs
-// at startup, before the UI can do anything else.
 func (b *BinaryService) InstallMissingBinaries(p ProxyParams) error {
 	return b.start(nil, p.ProxyURL, true)
 }
@@ -146,7 +140,7 @@ func (b *BinaryService) UpdateYtDlp() error {
 func (b *BinaryService) start(names []Name, proxy string, wait bool) error {
 	release, err := b.Busy.Acquire(busy.Install)
 	if errors.Is(err, busy.ErrInstalling) {
-		return nil // joins the run in progress, whose events this caller also receives
+		return nil
 	}
 	if err != nil {
 		return err
@@ -283,7 +277,6 @@ func download(url, target, proxy string, progress func(received, total int64)) e
 	return f.Close()
 }
 
-// extract copies the named entries out of a zip into bin, each through a temp file and a rename.
 func extract(zipPath string, files []file, bin string) error {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -346,7 +339,6 @@ type YtDlpUpdate struct {
 
 const ytDlpLatest = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
 
-// CheckYtDlpUpdate answers "no update" whenever it can't tell.
 func (b *BinaryService) CheckYtDlpUpdate(ctx context.Context) YtDlpUpdate {
 	m := b.readManifest()
 	if m.YtDlp == nil || m.YtDlp.Version == "" {

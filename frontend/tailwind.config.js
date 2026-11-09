@@ -7,7 +7,6 @@ export default {
 	theme: {
 		extend: {
 			fontFamily: {
-				// Wordmark only — see the @font-face in index.css.
 				wordmark: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
 			},
 			colors: {
@@ -51,12 +50,8 @@ export default {
 				},
 			},
 			transitionTimingFunction: {
-				// Named rather than written at the call site as
-				// `ease-[cubic-bezier(…)]`: tailwindcss-animate claims the same
-				// `ease-` prefix for `animation-timing-function`, which makes any
-				// *arbitrary* value under it ambiguous — Tailwind warns and emits
-				// nothing, so the class silently does nothing. A named key is fine;
-				// both plugins simply take it.
+				// Named, not `ease-[cubic-bezier(…)]`: tailwindcss-animate also claims `ease-`, so Tailwind
+				// warns about an arbitrary value under it and emits nothing.
 				swift: "cubic-bezier(0.22, 0.7, 0.2, 1)",
 			},
 			borderRadius: {
@@ -73,10 +68,6 @@ export default {
 					from: { height: "var(--radix-accordion-content-height)" },
 					to: { height: "0" },
 				},
-				// One full low→high→low stroke. The bars of NowPlayingBars all run
-				// it at the same duration, staggered a quarter cycle apart via
-				// negative delays, so together they form a traveling wave that
-				// repeats exactly once per cycle.
 				equalize: {
 					"0%, 100%": { transform: "scaleY(0.3)" },
 					"50%": { transform: "scaleY(1)" },

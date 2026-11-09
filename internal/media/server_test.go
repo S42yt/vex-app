@@ -88,7 +88,6 @@ func readAll(t *testing.T, url, rng string) (*http.Response, []byte) {
 	return res, b
 }
 
-// Range answered from the shared download, with the headers <audio> needs.
 func TestRangeFromSharedDownload(t *testing.T) {
 	r := newRig(t, 2<<20, 0)
 	res, body := readAll(t, r.proxy.URL("/track/t1"), "bytes=1000-1999")
@@ -106,7 +105,6 @@ func TestRangeFromSharedDownload(t *testing.T) {
 	}
 }
 
-// Chromium cancels the bytes=0- request on every seek; the download must still finish into the cache.
 func TestDownloadOutlivesClient(t *testing.T) {
 	const size = 3 << 20
 	r := newRig(t, size, 4<<20)
@@ -134,8 +132,6 @@ func TestDownloadOutlivesClient(t *testing.T) {
 	}
 }
 
-// Chromium stops reading a media connection once its buffer is full, without closing it.
-// The cache fill must not depend on that connection draining.
 func TestPausedClientDoesNotStallFill(t *testing.T) {
 	const size = 6 << 20
 	r := newRig(t, size, 0)
@@ -146,7 +142,7 @@ func TestPausedClientDoesNotStallFill(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer res.Body.Close()
-	io.ReadFull(res.Body, make([]byte, 64<<10)) // then stop reading, keep the connection
+	io.ReadFull(res.Body, make([]byte, 64<<10))
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		if r.proxy.cache.Len() == 1 {
@@ -157,7 +153,6 @@ func TestPausedClientDoesNotStallFill(t *testing.T) {
 	t.Fatalf("cache still empty after 3 s with a paused client; backend sent %d of %d bytes", r.be.Sent.Load(), size)
 }
 
-// A seek past the downloaded bytes is forwarded upstream; aborting it cancels that upstream.
 func TestSeekAheadForwardedAndCancellable(t *testing.T) {
 	r := newRig(t, 8<<20, 1<<20)
 	first := get(t, r.proxy.URL("/track/t1"), "bytes=0-")
@@ -187,17 +182,16 @@ func TestSeekAheadForwardedAndCancellable(t *testing.T) {
 	}
 }
 
-// A seek inside what has already arrived is served locally, without a new upstream request.
 func TestSeekBehindServedLocally(t *testing.T) {
 	r := newRig(t, 4<<20, 0)
 	_, _ = readAll(t, r.proxy.URL("/track/t1"), "bytes=0-1")
 	r.waitEvent(t, "download")
-	r.proxy.cache.Clear() // force the in-flight path on a fresh download
+	r.proxy.cache.Clear()
 	slow := newRig(t, 4<<20, 2<<20)
 	first := get(t, slow.proxy.URL("/track/t1"), "bytes=0-")
 	defer first.Body.Close()
 	io.ReadFull(first.Body, make([]byte, 64<<10))
-	time.Sleep(600 * time.Millisecond) // ~1.2 MB downloaded
+	time.Sleep(600 * time.Millisecond)
 	res, body := readAll(t, slow.proxy.URL("/track/t1"), "bytes=500000-500999")
 	if res.StatusCode != 206 || !bytes.Equal(body, slow.be.Tracks["t1"][500000:501000]) {
 		t.Fatal("local seek wrong")
@@ -210,7 +204,6 @@ func TestSeekBehindServedLocally(t *testing.T) {
 	}
 }
 
-// /head joins the element's download, or starts the shared one itself; never a second request.
 func TestHeadSharesDownload(t *testing.T) {
 	for _, headFirst := range []bool{true, false} {
 		r := newRig(t, 4<<20, 8<<20)
@@ -244,7 +237,6 @@ func TestHeadSharesDownload(t *testing.T) {
 	}
 }
 
-// http.ServeContent answers every Range form TrackCache.ts hand-parses.
 func TestCacheRanges(t *testing.T) {
 	r := newRig(t, 1<<20, 0)
 	readAll(t, r.proxy.URL("/track/t1"), "")
@@ -260,7 +252,7 @@ func TestCacheRanges(t *testing.T) {
 		{"bytes=-500", 206, data[len(data)-500:]},
 		{"bytes=10-19", 206, data[10:20]},
 		{"bytes=2000000-", 416, nil},
-		{"bytes=0-0,5-5", 206, nil}, // multipart/byteranges
+		{"bytes=0-0,5-5", 206, nil},
 	}
 	for _, c := range cases {
 		res, b := readAll(t, r.proxy.URL("/track/t1"), c.rng)
@@ -273,13 +265,12 @@ func TestCacheRanges(t *testing.T) {
 	}
 }
 
-// A session change cancels the in-flight download and clears the cache.
 func TestSessionChangeStopsDownload(t *testing.T) {
 	r := newRig(t, 8<<20, 1<<20)
 	res := get(t, r.proxy.URL("/track/t1"), "bytes=0-")
 	io.ReadFull(res.Body, make([]byte, 32<<10))
 	r.sess.set(Route{BaseURL: r.beSrv.URL, Token: "tok2", Client: streamClient()})
-	res2 := get(t, r.proxy.URL("/track/t1/head"), "") // any request syncs auth
+	res2 := get(t, r.proxy.URL("/track/t1/head"), "")
 	res2.Body.Close()
 	res.Body.Close()
 	e := r.waitEvent(t, "download")
@@ -291,8 +282,6 @@ func TestSessionChangeStopsDownload(t *testing.T) {
 	}
 }
 
-// A whole-file response without Content-Length can't be shared or cached: every request
-// is answered on its own (seeks included) instead, with the bytes intact.
 func TestNoContentLengthFallsBackToForwarding(t *testing.T) {
 	r := newRig(t, 1<<20, 0)
 	r.be.Chunked = true
@@ -312,7 +301,6 @@ func TestNoContentLengthFallsBackToForwarding(t *testing.T) {
 	t.Logf("backend requests: %v", r.be.Log())
 }
 
-// A 401 on the stream path expires the session it was served under, once.
 func TestUnauthorizedExpiresRoute(t *testing.T) {
 	r := newRig(t, 1<<20, 0)
 	expired := make(chan struct{}, 4)
@@ -328,7 +316,6 @@ func TestUnauthorizedExpiresRoute(t *testing.T) {
 	}
 }
 
-// Images pass through with their validators; only a pinned version may be cached.
 func TestImageRoute(t *testing.T) {
 	img := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Header.Get("Authorization") != "tok" || req.URL.Path != "/artist/7/image" {
@@ -364,8 +351,6 @@ func TestImageRoute(t *testing.T) {
 	res.Body.Close()
 }
 
-// Saving to disk reads the shared download while playback joins it: one backend fetch,
-// and a second save is served from the cache.
 func TestReaderSharesDownload(t *testing.T) {
 	r := newRig(t, 3<<20, 4<<20)
 	want := r.be.Tracks["t1"]

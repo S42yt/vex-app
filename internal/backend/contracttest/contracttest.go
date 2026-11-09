@@ -1,4 +1,3 @@
-// Package contracttest checks what the Go client sends and decodes against contract/contract.ts.
 package contracttest
 
 import (
@@ -18,7 +17,6 @@ type Exchange struct {
 	Response any             `json:"response,omitempty"`
 }
 
-// Recorder is a backend that accepts every request and keeps it.
 type Recorder struct {
 	mu   sync.Mutex
 	seen []Exchange
@@ -38,8 +36,6 @@ func (r *Recorder) Seen() []Exchange {
 	return append([]Exchange(nil), r.seen...)
 }
 
-// Check fails the test on any exchange the contract refuses or only half reads.
-// It needs bun and contract/node_modules, and a caller two directories below the repo root.
 func Check(t *testing.T, xs []Exchange) {
 	t.Helper()
 	in, err := json.Marshal(xs)

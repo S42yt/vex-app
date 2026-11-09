@@ -15,18 +15,13 @@ export interface ProxyParams {
 	proxyUrl?: string;
 }
 
-// What a rejected call carries: Go's error message, plus the fields of a backend.Failure
-// or an update.Refusal when the error was one.
 export interface Failure {
 	error: string;
 	status?: number;
-	// Retry-After from a 429. The contract requires honouring the wait rather than
-	// retrying.
 	retryAfterSec?: number;
 	downloadMissing?: boolean;
 }
 
-// A local file staged by Go for the review dialog, or refused with `error`.
 export interface StagedFile {
 	id: string;
 	fileName: string;
@@ -40,7 +35,6 @@ export interface ConfirmUploadParams {
 	stagedId: string;
 	title: string;
 	artistIds: number[];
-	// Absent keeps the staged cover; null drops it.
 	coverBase64?: string | null;
 }
 
@@ -59,7 +53,6 @@ export interface DownloadTrackParams {
 	startingFolder?: string;
 }
 
-// Empty when the folder dialog was cancelled.
 export interface SavedTrack {
 	path?: string;
 	folder?: string;
@@ -246,7 +239,6 @@ export interface PresenceStatus {
 	refusal?: PresenceRefusal;
 }
 
-// Go numbers every status: a reply and an event travel separately, so either can arrive first.
 export type NumberedPresenceStatus = PresenceStatus & { seq: number };
 
 export interface UninstallTarget {

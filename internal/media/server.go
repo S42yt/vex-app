@@ -1,9 +1,3 @@
-// Package media is the loopback server the webview loads audio and images from.
-//
-// One shared download per track: a goroutine owned by the server (not by any
-// request) fills a buffer; every request for that track, /head included, reads
-// from it through http.ServeContent at its own pace. A request far ahead of the
-// download is forwarded upstream as a Range request instead of waiting.
 package media
 
 import (
@@ -25,32 +19,26 @@ import (
 )
 
 const (
-	HeadBytes = 1_500_000
-	// A request starting this far past the downloaded bytes is forwarded upstream.
+	HeadBytes      = 1_500_000
 	seekAheadSlack = 1 << 20
 )
 
-// Route is the session a request is served under.
 type Route struct {
 	BaseURL, Token string
-	// Client is the stream client: no gzip, so the whole-file response keeps its Content-Length.
-	Client *http.Client
-	// Expire ends this session after a 401; a newer session survives it.
-	Expire func()
+	Client         *http.Client
+	Expire         func()
 }
 
 type Session interface{ Route() (Route, bool) }
 
-// Covers hands out the cover extracted when a local file was staged for upload.
 type Covers interface {
 	Cover(id string) ([]byte, bool)
 }
 
-// Event records how one request or download went; tests read it through onEvent.
 type Event struct {
 	Path, Range       string
 	Upstream          int
-	Mode              string // cache | shared | forward | head-cache | head-shared | download
+	Mode              string
 	ToClient, Drained int64
 	ClientGone        bool
 	UpstreamCancelled bool
@@ -60,7 +48,6 @@ type Event struct {
 type Server struct {
 	secret  string
 	session Session
-	// Staged serves /staged/<id>/cover; set before Start.
 	Staged  Covers
 	cache   *Cache
 	onEvent func(Event)
@@ -122,8 +109,6 @@ func (s *Server) StagedCoverURL(id string) string { return s.URL("/staged/" + id
 
 func (s *Server) Evict(id string) { s.cache.Delete(id) }
 
-// Reader returns a track's bytes from the cache or the shared download, or else straight
-// from the backend. Reads end with ctx.
 func (s *Server) Reader(ctx context.Context, id string) (io.ReadCloser, error) {
 	route, ok := s.session.Route()
 	if !ok {
@@ -226,7 +211,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.err != nil && d.total == 0 {
-		// The download never got a usable response: answer this request on its own.
 		ev.Mode = "forward"
 		s.forward(w, r, route, id, &ev)
 		return
@@ -268,7 +252,6 @@ func (s *Server) syncAuth(r Route) {
 	}
 }
 
-// join returns the track's in-flight download, starting one if there is none.
 func (s *Server) join(id string, route Route) *download {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -350,7 +333,6 @@ func fetch(ctx context.Context, route Route, path string, h http.Header) (*http.
 
 var imageHeaders = []string{"Content-Type", "Content-Range", "Accept-Ranges", "ETag"}
 
-// serveImage forwards an image; only a URL that pins a content hash may be cached for good.
 func (s *Server) serveImage(w http.ResponseWriter, r *http.Request, kind, id string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -405,7 +387,6 @@ func (s *Server) serveImage(w http.ResponseWriter, r *http.Request, kind, id str
 
 var passthrough = []string{"Content-Type", "Content-Range", "Accept-Ranges"}
 
-// forward answers one request with its own upstream Range request, cancelled with the client.
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, route Route, id string, ev *Event) {
 	res, err := s.upstream(r.Context(), route, id, r.Header.Get("Range"))
 	if err != nil {
@@ -455,9 +436,8 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// download is a growing buffer with one writer (fetch) and any number of readers.
 type download struct {
-	ready     chan struct{} // closed once total/contentType are known, or on failure
+	ready     chan struct{}
 	readyOnce sync.Once
 
 	mu          sync.Mutex
@@ -465,7 +445,7 @@ type download struct {
 	total       int64
 	contentType string
 	err         error
-	changed     chan struct{} // closed and replaced on every append, completion or failure
+	changed     chan struct{}
 }
 
 var errFailed = errors.New("download failed")
@@ -508,7 +488,6 @@ func (d *download) reader(ctx context.Context) *progressive {
 	return &progressive{d: d, ctx: ctx}
 }
 
-// progressive is an io.ReadSeeker (and ReaderAt) over a download; reads block until the bytes arrive.
 type progressive struct {
 	d   *download
 	ctx context.Context

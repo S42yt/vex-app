@@ -1,5 +1,3 @@
-// Command fake stands in for yt-dlp.exe in tests. A search term or URL containing "fail"
-// fails like yt-dlp does, and one containing "slow" runs until it is killed.
 package main
 
 import (

@@ -34,7 +34,6 @@ func TestExtractAndStatus(t *testing.T) {
 		t.Fatal("a missing entry extracted")
 	}
 
-	// Files alone don't count; the manifest says the install finished.
 	if st := b.GetBinaryStatus(); slices.Contains(st.Installed, FFmpeg) {
 		t.Fatal("installed without a manifest entry")
 	}

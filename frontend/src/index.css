@@ -57,10 +57,6 @@
 	}
 
 	:root {
-		/* Violet, not primary: primary is the same 98% as foreground here,
-		   so a glyph taking it would come out the colour of the label beside
-		   it. Chosen against the app bar, not the page, so it sits outside
-		   the theme blocks. */
 		--nav: 270 88% 58%;
 		--nav-edge: 270 85% 66%;
 		--nav-bright: 270 82% 78%;
@@ -93,7 +89,6 @@
 }
 
 .np-ring {
-	/* Nominal 2px landed on the nearest whole device pixel. */
 	--np-ring-width: calc(round(2px * var(--dpr), 1px) / var(--dpr));
 	--np-ring-gap: calc(round(2px * var(--dpr), 1px) / var(--dpr));
 	position: absolute;

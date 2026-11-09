@@ -1,5 +1,3 @@
-// Package buildinfo holds what the build decides: the channel (a build tag) and the version
-// (the exe's version resource, which wails3 generates from build/config.yml).
 package buildinfo
 
 import (
@@ -10,10 +8,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Channel is "dev", "stable" or "canary"; the stable tag sets it.
 var Channel = "dev"
 
-// Version is the exe's product version, or "0.0.0" without a version resource (go run, go test).
 var Version = func() string {
 	exe, err := os.Executable()
 	if err != nil {
@@ -22,7 +18,6 @@ var Version = func() string {
 	return fileVersion(exe)
 }()
 
-// UninstallKeys maps each installable channel to its HKCU Uninstall key (NSIS UNINST_KEY_NAME).
 var UninstallKeys = map[string]string{"stable": "VexWave", "canary": "VexWave Canary"}
 
 func fileVersion(path string) string {

@@ -19,7 +19,6 @@ func (urls) ArtistImageURL(id int32, v string) string   { return "L/artist/image
 func (urls) PlaylistImageURL(id int32, v string) string { return "L/playlist/image?v=" + v }
 func (urls) Evict(string)                               {}
 
-// The frontend's types have no null arrays, so nothing GetLibrary returns may marshal as one.
 func TestLibraryHasNoNullArrays(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"tracks":[{"id":"t","title":"T","duration":1000,"artistIds":null,"coverUrl":"/track/t/image?v=h"}],"artists":[],"playlists":[{"id":1,"name":"P","trackIds":null}]}`))
@@ -44,7 +43,6 @@ func TestLibraryHasNoNullArrays(t *testing.T) {
 	}
 }
 
-// A 401 on an ordinary call logs out the session that made it.
 func TestUnauthorizedExpires(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

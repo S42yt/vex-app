@@ -11,7 +11,6 @@ import (
 	"github.com/VexWave/vex-app/internal/platform"
 )
 
-// managedBin is the installed tools' folder; the probe tests skip without ffprobe there.
 func managedBin(t *testing.T) string {
 	bin := datadirs.Default().Bin()
 	if _, err := os.Stat(filepath.Join(bin, "ffprobe.exe")); err != nil {
@@ -26,7 +25,6 @@ func managedBin(t *testing.T) string {
 	return bin
 }
 
-// The values music-metadata read from the same files in the reference app, within 100 ms.
 func TestProbe(t *testing.T) {
 	bin := managedBin(t)
 	cover, _ := os.ReadFile(filepath.Join("testdata", "cover.jpg"))

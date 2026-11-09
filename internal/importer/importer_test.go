@@ -29,7 +29,6 @@ func (r recorder) Emit(name string, data ...any) bool { r <- event{name, data[0]
 
 func id(n int) string { return fmt.Sprintf("00000000-0000-4000-8000-%012d", n) }
 
-// service starts an importer on the fake yt-dlp; its Stage records the files it's given.
 func service(t *testing.T) (*ImportService, recorder, *[]string) {
 	var mu sync.Mutex
 	staged := &[]string{}
@@ -50,7 +49,6 @@ func service(t *testing.T) (*ImportService, recorder, *[]string) {
 	return s, ev, staged
 }
 
-// next returns the next terminal event (staged or failed), collecting the progress steps before it.
 func next(t *testing.T, ev recorder) (event, []string) {
 	t.Helper()
 	var steps []string
@@ -103,7 +101,6 @@ func TestFailedImportCleansUp(t *testing.T) {
 	}
 }
 
-// Jobs run one at a time in order, and queued ones keep installs out.
 func TestQueueOrderAndBusy(t *testing.T) {
 	s, ev, staged := service(t)
 	for i := range 4 {

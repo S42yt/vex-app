@@ -13,7 +13,6 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// The test binary doubles as a fake uninstall.exe and as a process that lives for a while.
 func TestMain(m *testing.M) {
 	if os.Getenv("SLEEP_THEN_EXIT") != "" {
 		time.Sleep(700 * time.Millisecond)
@@ -53,7 +52,6 @@ func TestInstallDir(t *testing.T) {
 	}
 }
 
-// The helper outlives its parent, waits for the given PID, then runs uninstall.exe /S.
 func TestHelperWaitsThenUninstalls(t *testing.T) {
 	dir := t.TempDir()
 	self, _ := os.Open(os.Args[0])

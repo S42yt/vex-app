@@ -15,16 +15,8 @@ export interface Refusal {
 }
 
 export interface Status {
-    /**
-     * "offline" | "connected" | "refused"
-     */
     "connection": string;
     "refusal"?: Refusal | null;
-
-    /**
-     * Seq orders replies and events: they reach the webview by different paths, so an event
-     * can arrive before the reply to a call made earlier.
-     */
     "seq": number;
 }
 

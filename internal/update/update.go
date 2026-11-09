@@ -1,5 +1,3 @@
-// Package update drives Wails' updater against the GitHub releases: check, download in the
-// background, then hand over to its swap helper and quit.
 package update
 
 import (
@@ -19,7 +17,6 @@ import (
 
 const repository = "VexWave/vex-app"
 
-// Configure points u at the GitHub releases, with every request going through the session's proxy.
 func Configure(u *updater.Updater, version string, proxy func() string) error {
 	return configure(u, version, github.Config{
 		Repository:    repository,
@@ -38,16 +35,13 @@ func configure(u *updater.Updater, version string, gc github.Config) error {
 
 type proxied func() string
 
-// The stream client sends no Accept-Encoding, so a release asset keeps its Content-Length for the progress bar.
 func (p proxied) RoundTrip(r *http.Request) (*http.Response, error) {
 	return netx.For(p()).Stream.Transport.RoundTrip(r)
 }
 
-// UpdateService is bound. Progress reaches the UI as Wails' own wails:updater:* events.
 type UpdateService struct {
-	Updater *updater.Updater // nil on a channel that never updates itself
-	Busy    *busy.Registry
-	// Installed says whether this copy came from the installer; only that copy may swap its exe.
+	Updater   *updater.Updater
+	Busy      *busy.Registry
 	Installed func() bool
 
 	ctx         context.Context
@@ -64,9 +58,8 @@ func (s *UpdateService) ServiceStartup(ctx context.Context, _ application.Servic
 	return nil
 }
 
-// sweep removes what Wails' updater leaves beside the exe: a staged download is only cleared by
-// the next download in the same run, and a swap renames the replaced exe aside because Windows
-// won't delete it while it's still mapped. SingleInstance has exited a second launch before this runs.
+// Wails' updater clears a staged download only on the next download, and leaves the swapped-out exe
+// renamed aside. SingleInstance has exited a second launch before this runs.
 func sweep(exe string) {
 	stale, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "wails-update-*"))
 	olds, _ := filepath.Glob(exe + ".old.*")
@@ -79,7 +72,6 @@ type Available struct {
 	LatestVersion string `json:"latestVersion,omitempty"`
 }
 
-// Check reports a newer release; any failure reads as "no update", as the banner has nothing to say about it.
 func (s *UpdateService) Check(ctx context.Context) Available {
 	if s.Updater == nil {
 		return Available{}
@@ -94,7 +86,6 @@ func (s *UpdateService) Check(ctx context.Context) Available {
 	return Available{rel.Version}
 }
 
-// Download starts the download and returns; it ends with update-ready or error.
 func (s *UpdateService) Download() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -119,7 +110,6 @@ func (s *UpdateService) Download() error {
 	return nil
 }
 
-// Refusal is an install that didn't start; DownloadMissing sends the banner back to the download step.
 type Refusal struct {
 	Message         string `json:"error"`
 	DownloadMissing bool   `json:"downloadMissing,omitempty"`
@@ -127,7 +117,6 @@ type Refusal struct {
 
 func (r *Refusal) Error() string { return r.Message }
 
-// Install hands the downloaded exe to the swap helper and quits the app.
 func (s *UpdateService) Install(ctx context.Context) error {
 	if reason := s.Busy.QuitBlocker(); reason != "" {
 		return &Refusal{Message: reason}

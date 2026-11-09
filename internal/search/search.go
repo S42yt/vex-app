@@ -1,5 +1,3 @@
-// Package search runs Discover searches through yt-dlp and ranks the hits (rank.go, tuned
-// against the real pages in testdata/pages.json).
 package search
 
 import (
@@ -33,7 +31,6 @@ const (
 
 var prefixes = map[string]string{"youtube": "ytsearch", "soundcloud": "scsearch"}
 
-// SearchService is bound. A new search cancels the one still running.
 type SearchService struct {
 	Bin   string
 	Busy  *busy.Registry
@@ -76,7 +73,6 @@ func (s *SearchService) Search(ctx context.Context, p SearchParams) ([]Result, e
 	}
 	defer release()
 
-	// The call's own ctx is the parent, so the webview cancelling its promise stops it too.
 	ctx, cancel := context.WithCancelCause(ctx)
 	s.mu.Lock()
 	if s.cancel != nil {
@@ -193,7 +189,6 @@ func parse(stdout, source, query string) []Result {
 	return out
 }
 
-// first is JS's a ?? b for yt-dlp's optional fields.
 func first(a, b *string) string {
 	if a != nil {
 		return *a

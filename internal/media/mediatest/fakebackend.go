@@ -1,4 +1,3 @@
-// Package mediatest is a fake backend audio route for tests of the code that streams from it.
 package mediatest
 
 import (
@@ -11,17 +10,13 @@ import (
 	"time"
 )
 
-// FakeBackend serves /track/<id>/audio like contract.ts's audio route.
 type FakeBackend struct {
 	Token       string
 	Tracks      map[string][]byte
 	ContentType string
-	// BytesPerSec throttles the body (0 = unthrottled).
 	BytesPerSec int
-	// GzipIfAsked mimics a reverse proxy that compresses when the client offers gzip.
 	GzipIfAsked bool
-	// Chunked answers a whole-file request without Content-Length.
-	Chunked bool
+	Chunked     bool
 
 	Sent     atomic.Int64
 	mu       sync.Mutex
@@ -82,7 +77,7 @@ func (b *FakeBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if b.Chunked && r.Header.Get("Range") == "" {
-		throttled{w, b.BytesPerSec, &b.Sent}.Write(data) // flushes per 16 KiB, so no Content-Length
+		throttled{w, b.BytesPerSec, &b.Sent}.Write(data)
 		return
 	}
 	http.ServeContent(throttled{w, b.BytesPerSec, &b.Sent}, r, "", time.Time{}, bytes.NewReader(data))

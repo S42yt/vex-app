@@ -10,7 +10,6 @@ type Entry struct {
 	ContentType string
 }
 
-// Cache is a byte-bounded LRU (port of TrackCache.ts).
 type Cache struct {
 	mu    sync.Mutex
 	max   int64

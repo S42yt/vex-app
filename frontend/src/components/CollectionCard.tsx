@@ -72,8 +72,6 @@ export function CollectionCard({
 			tabIndex={0}
 			onClick={onOpen}
 			onKeyDown={(e) => {
-				// Keys on the inner buttons bubble here; without the guard one would also
-				// open the collection.
 				if (e.target !== e.currentTarget) return;
 				if (e.key === "Enter" || e.key === " ") {
 					e.preventDefault();

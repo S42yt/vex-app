@@ -1,4 +1,3 @@
-// Package upload stages local audio files by path and streams them to the backend one at a time.
 package upload
 
 import (
@@ -25,7 +24,6 @@ import (
 
 const MaxAudioBytes = backend.MaxAudioBase64 / 4 * 3
 
-// Staged is a file waiting for the review dialog, or one refused with Error.
 type Staged struct {
 	ID         string `json:"id"`
 	FileName   string `json:"fileName"`
@@ -39,7 +37,7 @@ type entry struct {
 	path       string
 	durationMs int
 	cover      []byte
-	owned      bool // an import's output, deleted once uploaded or discarded
+	owned      bool
 }
 
 func (e *entry) done() {
@@ -48,7 +46,6 @@ func (e *entry) done() {
 	}
 }
 
-// UploadService is bound.
 type UploadService struct {
 	Bin      string
 	Busy     *busy.Registry
@@ -57,10 +54,9 @@ type UploadService struct {
 
 	mu     sync.Mutex
 	staged map[string]*entry
-	last   chan struct{} // closed when the most recently queued upload ends
+	last   chan struct{}
 }
 
-// Pick asks for audio files and stages them; a cancelled dialog stages nothing.
 func (u *UploadService) Pick(ctx context.Context) ([]Staged, error) {
 	paths, err := application.Get().Dialog.OpenFile().
 		CanChooseFiles(true).
@@ -76,9 +72,6 @@ func (u *UploadService) Pick(ctx context.Context) ([]Staged, error) {
 	return u.Stage(ctx, paths, false)
 }
 
-// Stage reads each file's title, duration and cover. Files over the limit are refused
-// before they are read. Owned files are deleted once uploaded or discarded.
-//
 //wails:ignore
 func (u *UploadService) Stage(ctx context.Context, paths []string, owned bool) ([]Staged, error) {
 	unlock, err := datadirs.LockBin(u.Bin, false, false)
@@ -126,8 +119,6 @@ func (u *UploadService) Stage(ctx context.Context, paths []string, owned bool) (
 	return out, nil
 }
 
-// Cover is the cover extracted at staging, for the media server's /staged route.
-//
 //wails:ignore
 func (u *UploadService) Cover(id string) ([]byte, bool) {
 	u.mu.Lock()
@@ -151,15 +142,12 @@ func (u *UploadService) Discard(ids []string) {
 }
 
 type ConfirmParams struct {
-	StagedID  string  `json:"stagedId"`
-	Title     string  `json:"title"`
-	ArtistIDs []int32 `json:"artistIds"`
-	// Absent keeps the staged cover; null drops it.
+	StagedID    string                   `json:"stagedId"`
+	Title       string                   `json:"title"`
+	ArtistIDs   []int32                  `json:"artistIds"`
 	CoverBase64 backend.Nullable[string] `json:"coverBase64,omitzero"`
 }
 
-// Confirm uploads a staged file after every upload confirmed before it. It holds a
-// Transfer token while queued, so quitting and app updates see the whole queue.
 func (u *UploadService) Confirm(ctx context.Context, p ConfirmParams) error {
 	u.mu.Lock()
 	e := u.staged[p.StagedID]
@@ -212,8 +200,6 @@ type meta struct {
 	Cover     string  `json:"cover,omitempty"`
 }
 
-// body streams {...meta, "data":"<base64 of f>"} with its exact length; stop ends the encoder
-// when the request gives up early.
 func body(m meta, f *os.File) (backend.Stream, func(), error) {
 	st, err := f.Stat()
 	if err != nil {
@@ -247,7 +233,7 @@ func tooLarge(size int64) string {
 	return "That track is " + mb(size) + " — the server accepts up to " + mb(MaxAudioBytes) + "."
 }
 
-// clampTitle keeps the contract's limit, which counts UTF-16 units as zod does.
+// zod counts UTF-16 units.
 func clampTitle(title string) string {
 	title = strings.TrimSpace(title)
 	units := 0
