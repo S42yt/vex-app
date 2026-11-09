@@ -1,8 +1,5 @@
 // There is no DPR change event: the idiom is a media query pinned to the
-// current ratio, which can then only stop matching, re-armed each time it
-// fires. resize is a second trigger because CEF settles on the monitor scale
-// only after its first frame (src/bun/index.ts), so the ratio read before that
-// can be stale.
+// current ratio, which can then only stop matching, re-armed each time it fires.
 export function watchDevicePixelRatio() {
 	let query: MediaQueryList | null = null;
 	let published: number | null = null;
@@ -19,5 +16,4 @@ export function watchDevicePixelRatio() {
 	};
 
 	publish();
-	window.addEventListener("resize", publish);
 }

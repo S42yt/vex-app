@@ -89,6 +89,13 @@ func main() {
 	updates := &update.UpdateService{Busy: busyRegistry, Installed: func() bool { _, ok := uninstall.InstallDir(); return ok }}
 	uninstaller := &uninstall.UninstallService{Busy: busyRegistry}
 
+	// Border and text mirror --border and --foreground in index.css; the caption sits above --card so it reads apart from the header.
+	caption := &application.WindowTheme{
+		TitleBarColour:  application.NewRGBPtr(0x1c, 0x1c, 0x1c),
+		BorderColour:    application.NewRGBPtr(0x26, 0x26, 0x26),
+		TitleTextColour: application.NewRGBPtr(0xfa, 0xfa, 0xfa),
+	}
+
 	var window *application.WebviewWindow
 	app := application.New(application.Options{
 		Name:        "VexWave",
@@ -140,6 +147,10 @@ func main() {
 		Height:           800,
 		BackgroundColour: application.NewRGB(10, 10, 10),
 		URL:              "/",
+		Windows: application.WindowsWindow{
+			Theme:       application.Dark,
+			CustomTheme: application.ThemeSettings{DarkModeActive: caption, DarkModeInactive: caption},
+		},
 	})
 
 	if err := app.Run(); err != nil {
