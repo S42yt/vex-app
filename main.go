@@ -17,6 +17,8 @@ import (
 	"github.com/VexWave/vex-app/internal/presence"
 	"github.com/VexWave/vex-app/internal/search"
 	"github.com/VexWave/vex-app/internal/session"
+	"github.com/VexWave/vex-app/internal/uninstall"
+	"github.com/VexWave/vex-app/internal/update"
 	"github.com/VexWave/vex-app/internal/upload"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -27,6 +29,22 @@ var assets embed.FS
 const trackCacheBytes = 256 << 20
 
 func main() {
+	// The installer and the uninstall helper run these modes; they must stay clear of SingleInstance.
+	if len(os.Args) > 1 {
+		switch {
+		case os.Args[1] == "--remove-data":
+			if err := uninstall.RemoveData(); err != nil {
+				log.Fatal(err)
+			}
+			return
+		case os.Args[1] == "--uninstall-helper" && len(os.Args) == 4:
+			if err := uninstall.Helper(os.Args[2], os.Args[3]); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+	}
+
 	layout := datadirs.Default()
 	store := &session.Store{}
 	busyRegistry := &busy.Registry{}
@@ -68,6 +86,9 @@ func main() {
 		browserArgs = []string{"--remote-debugging-port=" + port}
 	}
 
+	updates := &update.UpdateService{Busy: busyRegistry, Installed: func() bool { _, ok := uninstall.InstallDir(); return ok }}
+	uninstaller := &uninstall.UninstallService{Busy: busyRegistry}
+
 	var window *application.WebviewWindow
 	app := application.New(application.Options{
 		Name:        "VexWave",
@@ -81,6 +102,8 @@ func main() {
 			application.NewService(imports),
 			application.NewService(&search.SearchService{Bin: layout.Bin(), Busy: busyRegistry, Proxy: proxy}),
 			application.NewService(presenceService),
+			application.NewService(updates),
+			application.NewService(uninstaller),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -103,6 +126,13 @@ func main() {
 	binaryService.Events = app.Event
 	imports.Events = app.Event
 	presenceService.Events = app.Event
+	uninstaller.Quit = app.Quit
+	if buildinfo.Channel != "canary" {
+		if err := update.Configure(app.Updater, buildinfo.Version, proxy); err != nil {
+			log.Fatal(err)
+		}
+		updates.Updater = app.Updater
+	}
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "VexWave",

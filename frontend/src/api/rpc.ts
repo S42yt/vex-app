@@ -7,6 +7,8 @@ import * as Library from "../../bindings/github.com/VexWave/vex-app/internal/lib
 import * as Presence from "../../bindings/github.com/VexWave/vex-app/internal/presence/presenceservice";
 import * as Search from "../../bindings/github.com/VexWave/vex-app/internal/search/searchservice";
 import * as Session from "../../bindings/github.com/VexWave/vex-app/internal/session/sessionservice";
+import * as Uninstall from "../../bindings/github.com/VexWave/vex-app/internal/uninstall/uninstallservice";
+import * as Update from "../../bindings/github.com/VexWave/vex-app/internal/update/updateservice";
 import * as Upload from "../../bindings/github.com/VexWave/vex-app/internal/upload/uploadservice";
 import type {
 	AppUpdateProgressMessage,
@@ -97,9 +99,6 @@ function newestPresence(s: PresenceStatus & { seq: number }): PresenceStatus {
 	return presence;
 }
 
-const notPorted = (name: string) => () =>
-	Promise.reject(new Error(`${name} isn't ported yet`));
-
 // A Go error rejects with its JSON in `cause` (backend.Failure: status, retryAfterSec, error).
 function failure(e: unknown): RpcFailure {
 	const cause = (e as { cause?: { status?: number; retryAfterSec?: number } })
@@ -124,7 +123,7 @@ function settle(
 	return call.then((value) => ({ ok: true, ...wrap(value) }), failure);
 }
 
-const ported: Partial<Requests> = {
+export const bun: Requests = {
 	login: (p) => settle(Session.Login(p), (token) => ({ token })),
 	restoreSession: (p) => settle(Session.RestoreSession(p)),
 	logout: () => settle(Session.Logout()),
@@ -163,16 +162,27 @@ const ported: Partial<Requests> = {
 		),
 	checkYtDlpUpdate: () =>
 		Binaries.CheckYtDlpUpdate().then((r) => ({ ok: true as const, ...r })),
+	checkAppUpdate: () =>
+		Update.Check().then((r) => ({ latestVersion: r.latestVersion || null })),
+	downloadAppUpdate: () => settle(Update.Download()),
+	installAppUpdate: () =>
+		Update.Install().then(
+			() => ({ ok: true as const }),
+			(e) =>
+				(e as { cause?: { downloadMissing?: boolean } }).cause?.downloadMissing
+					? { ...failure(e), downloadMissing: true as const }
+					: failure(e),
+		),
+	canUninstall: () => Uninstall.Removable(),
+	uninstallApp: () => settle(Uninstall.Start()),
 };
 
-export const bun = new Proxy(ported as Requests, {
-	get: (target, name) =>
-		target[name as keyof Requests] ?? notPorted(String(name)),
-});
-
-// Each pushed message is fed by one Go event per variant; wrap restores its `type`.
+// Each pushed message is fed by one Go event per variant; wrap restores its `type`, or drops the event.
 const pushed: {
-	[K in keyof Messages]?: { event: string; wrap?: (data: any) => Messages[K] }[];
+	[K in keyof Messages]?: {
+		event: string;
+		wrap?: (data: any) => Messages[K] | undefined;
+	}[];
 } = {
 	sessionExpired: [{ event: EventNames.SessionExpired }],
 	binaryProgress: [
@@ -180,6 +190,23 @@ const pushed: {
 		{ event: EventNames.BinariesInstalled, wrap: (d) => ({ type: "binaryInstalled", ...d }) },
 		{ event: EventNames.BinariesFinished, wrap: () => ({ type: "finished" }) },
 		{ event: EventNames.BinariesFailed, wrap: (d) => ({ type: "failed", ...d }) },
+	],
+	// Wails' updater emits these itself (wails:v3/pkg/updater/events.go).
+	appUpdateProgress: [
+		{
+			event: "wails:updater:download-progress",
+			wrap: (d) => ({
+				type: "progress",
+				receivedBytes: d.written,
+				totalBytes: d.total > 0 ? d.total : undefined,
+			}),
+		},
+		{ event: "wails:updater:update-ready", wrap: () => ({ type: "ready" }) },
+		{
+			event: "wails:updater:error",
+			wrap: (d) =>
+				d.stage === "check" ? undefined : { type: "failed", error: d.message },
+		},
 	],
 	presenceStatus: [{ event: EventNames.PresenceStatus, wrap: newestPresence }],
 	urlImportProgress: [
@@ -194,7 +221,10 @@ export function onBunMessage<K extends keyof Messages>(
 	listener: (payload: Messages[K]) => void,
 ): void {
 	for (const { event, wrap } of pushed[name] ?? []) {
-		Events.On(event, (e) => listener(wrap ? wrap(e.data) : e.data));
+		Events.On(event, (e) => {
+			const message = wrap ? wrap(e.data) : e.data;
+			if (message !== undefined) listener(message);
+		});
 	}
 }
 

@@ -4,7 +4,6 @@ import type {
 } from "@/api/types";
 import { mutate } from "./mutate";
 import { bun, onBunMessage } from "./rpc";
-import { uploadService } from "./UploadService";
 
 type AppUpdatePhase = "idle" | "downloading" | "ready" | "installing";
 
@@ -63,14 +62,6 @@ export class AppUpdateService {
 
 	async install(): Promise<void> {
 		if (this.snapshot.phase !== "ready") return;
-		// Bun sees only the upload in flight, not the queue behind it.
-		const { uploads } = uploadService.getSnapshot();
-		if (uploads.some((u) => u.status === "uploading")) {
-			this.update({
-				error: "Tracks are still uploading — try again when they're done.",
-			});
-			return;
-		}
 		this.update({ phase: "installing", error: null });
 		let result: InstallAppUpdateResult;
 		try {

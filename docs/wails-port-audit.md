@@ -37,8 +37,8 @@ The port starts on a new branch from a **fresh `wails3 init -t react` project** 
 |---|---|---|
 | Go module | `github.com/VexWave/vex-app` | `go.mod` |
 | Company | `realChriss` | `build/config.yml` `info.companyName`, copyright |
-| Product (stable) | `VexWave`, installed to `Programs\VexWave` | `build/config.yml` `info.productName`, `buildinfo` |
-| Product (canary, not packaged yet, §5) | `VexWave Canary`, `Programs\VexWave Canary` | `buildinfo` |
+| Product (stable) | `VexWave`, installed to `Programs\VexWave` | `build/config.yml` `info.productName` |
+| Product (canary, not packaged yet, §5) | `VexWave Canary`, `Programs\VexWave Canary` | its installer config, once canary is packaged |
 | Product identifier | `app.vexwave` (an app ID only, not the old uninstaller's registry key) | `build/config.yml` `info.productIdentifier` |
 | `UNINST_KEY_NAME` (stable / canary) | `VexWave` / `VexWave Canary`. Set explicitly; the default would be `<Company><Product>` | `project.nsi`, `buildinfo` |
 | Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (the Taskfile's `<APP_NAME>-installer.exe`) for first installs. None is `VexWave-Setup.exe` (§5) | `build-windows.yml` |
@@ -243,7 +243,7 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | HiDPI | `index.ts:204-222`, `bundleCEF`, `lib/devicePixelRatio.ts` | electrobun#324 | Wails manifest declares `permonitorv2` | Yes: deleted | low | test: `devicePixelRatio` 1.25 at 125 % scaling; WebView2 started with `--embedded-browser-webview-dpi-awareness=2` |
 | Installer | `scripts/fuse-installer.ts`, `build-windows.yml` | One setup exe | `wails3 package` → NSIS, per-user scope | Yes: deleted | med | src; build and run: §7 |
 | Version & release | `scripts/release.ts:6-9`, `build-windows.yml:71-81` | Version from tag | `build/config.yml` `info.version` | Same | low | src |
-| Channels | `index.ts:18`, `AppUpdater.ts:38-39` | dev/canary/stable | ldflags `channel`; per-channel product name, install folder and Uninstall key in `buildinfo`, and `VexWaveData\<channel>\`; canary doesn't self-update. Only stable is packaged for now (§5) | Same | low | n/a |
+| Channels | `index.ts:18`, `AppUpdater.ts:38-39` | dev/canary/stable | ldflags `channel`; per-channel install folder from the installer, Uninstall key in `buildinfo`, and `VexWaveData\<channel>\`; canary doesn't self-update. Only stable is packaged for now (§5) | Same | low | n/a |
 | Web Audio over loopback | `AudioPlayer.ts:38-41`, `StreamProxy.ts:151-168` | `crossOrigin` media needs ACAO | Same headers from Go | Same | low | test: analyser peak 0.125 (untainted) |
 | Single instance | absent | Two copies race on `bin/`, imports | `Options.SingleInstance` | New | low | test: second launch exits in ~1 s, first gets its args |
 | Type-check / CI | `.github/workflows/ci.yml` | tsc both projects | On `windows-latest`: tsc (`frontend/`, `contract/`), `go vet`, `go test -race`, bindings and limits freshness | Yes | low | n/a |
@@ -505,8 +505,12 @@ The login stays in `localStorage` (`storage.ts:75-79`) and is pushed to Go with 
 
 **What changes.**
 - **Releases** publish the bare app exe plus `SHA256SUMS`, next to the NSIS installer for first installs. The GitHub provider reads only `ChecksumAsset`, not GitHub's per-asset `digest` (`wails:v3/pkg/updater/providers/github/github.go:167-178`).
-- **Frontend:** keeps `AppUpdateBanner`. `AppUpdateService` maps `updater:*` events (`updater.md:481,531-541`) onto its phases.
-- **`UpdateService.Restart()`** checks `busy.QuitBlocker()` first, as `thenQuit` does today.
+- **Frontend:** keeps `AppUpdateBanner` and `AppUpdateService` with its own phases. The facade maps three of the updater's events onto `appUpdateProgress`: `wails:updater:download-progress` (`written`/`total`), `update-ready`, and `error` except at the `check` stage, since a failed check means no banner. A failed download shows the updater's own message (for example `updater: digest mismatch`).
+- **`internal/update`** wraps `app.Updater` (`update_test.go` runs it against a fake GitHub):
+  - `Configure` sets up the GitHub provider; its `HTTPClient` sends each request through `netx.For(proxy)`'s stream transport, so a proxy change applies to the next request and a release asset keeps its `Content-Length`.
+  - `Check` reports the newer version; any failure reads as no update, as `AppUpdater.ts:38-49` does.
+  - `Download` refuses with "There is no update to download." before a successful `Check` and "The update is already downloading." during one. It runs `DownloadAndInstall` in the background under a `busy.AppDownload` token.
+  - `Install` checks `busy.QuitBlocker()` first, as `thenQuit` does today, then that the staged file still exists (`downloadMissing` in the error's JSON otherwise), then the installed-copy check (`uninstall.InstallDir`), then calls `Restart`.
 - **Deleted:** `AppUpdater.ts`, `download.ts` (`BinaryManager` keeps a small download helper), `appRelease.ts`, the PowerShell worker and the WinForms window.
 - **No signing for now:** §5.
 
@@ -560,7 +564,8 @@ Evidence (`port-sandbox/gotests/datadirs/datadirs_test.go`, with real HKCU keys 
 
 **In-app uninstall:**
 - **`Removable()`:** reads `UninstallString` from this channel's HKCU key (`golang.org/x/sys/windows/registry`) and checks the running exe is inside that directory. Dev builds fail the check, as today.
-- **`Start()`:** copies the exe to `%TEMP%` and launches it in an uninstall helper mode (`--uninstall-helper <pid> <installdir>`, dispatched before `application.New`). The helper waits for the PID, then runs `uninstall.exe /S`, which removes the data through `--remove-data`. Shortcuts are the NSIS uninstaller's job.
+- **`Start()`:** copies the exe to `%TEMP%` and launches it in an uninstall helper mode (`--uninstall-helper <pid> <installdir>`, dispatched before `application.New`). The helper waits for the PID, then runs `uninstall.exe /S`, which removes the data through `--remove-data`. Shortcuts are the NSIS uninstaller's job. The helper copy stays in `%TEMP%`: a running exe can't delete itself, and a per-user process can't schedule a delete for the next reboot.
+- **Tests** (`internal/uninstall/uninstall_test.go`): `InstallDir` against a throwaway HKCU key; the helper waits for a live PID before running a fake `uninstall.exe /S`; a detached spawn runs.
 - **Job objects, measured** (`port-sandbox/app/probe.go` `jobInfo`):
   - launched from Explorer (a `.lnk` opened through `explorer.exe`), the app **is in a job**, without kill-on-close and with breakaway allowed;
   - launched by a parent with a kill-on-close job (the test harness), it is in a kill-on-close job.
@@ -638,7 +643,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 | `SessionService.ts:176` `sessionExpired` | `session:expired` |
 | `BinaryService.ts:225` `binaryProgress` | four `binaries:*` events; the facade can fold them back into today's message |
 | `ImportService.ts:187` `urlImportProgress` | `import:progress` / `import:staged` / `import:failed`; the `finished` variant becomes `staged`, carrying the staged file, and its `stage()` (:143-167) goes away |
-| `AppUpdateService.ts:125` `appUpdateProgress` | `updater:*` events |
+| `AppUpdateService.ts:125` `appUpdateProgress` | `wails:updater:download-progress`, `update-ready`, `error` |
 | `PresenceService.ts:110` `presenceStatus` | `presence:status` |
 
 ### Files that change
@@ -651,7 +656,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
   - review state (`staged`, `reviewedCount`) stays in the webview;
   - `music-metadata` (`package.json:36`) isn't added to `frontend/package.json`.
 - **`api/ImportService.ts`**: `stage()` and its `fetch(fileUrl)` (`:143-167`) are deleted.
-- **`api/AppUpdateService.ts`**: phases follow the updater states (`wails:v3/pkg/updater/types.go:13-22`); the upload-queue guard (`:66-73`) moves to Go.
+- **`api/AppUpdateService.ts`**: keeps its phases; the upload-queue guard (`:66-73`) is gone, since every queued upload holds `busy.Transfer` and `Install` checks `QuitBlocker`.
 - **`components/AddTracksButton.tsx:16-18`**: `<input type="file">` → `Uploads.Pick()`.
 - **`components/UploadReviewDialog.tsx:82`**: the staged cover comes from a loopback URL instead of `URL.createObjectURL(coverBlob)`. The replacement-cover picker (`:170-172`) stays a browser `File`.
 - **`App.tsx:44-50,67-74,110`**: the drop handlers and the `isDragging` overlay are deleted (§5).
@@ -686,7 +691,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 **Canary packaging and release.**
 - **Decision:** deferred. The port packages and releases stable only.
 - **What stays in the code**, so canary can be added without redesign:
-  - `buildinfo` knows dev, stable and canary, with stable's and canary's product names and `UNINST_KEY_NAME`s. Canary's are fixed now, though nothing packages it yet (see below);
+  - `buildinfo` knows dev, stable and canary, with stable's and canary's `UNINST_KEY_NAME`s (the app never needs a product name: the install folder comes from the Uninstall key). Canary's are fixed now, though nothing packages it yet (see below);
   - `VexWaveData\<channel>\` and the uninstall rule, with their tests (§3.11);
   - a canary build never sets up the updater (§3.9).
 - **Consequence:** with no canary installed, uninstalling stable removes `bin\` and the whole `VexWaveData` root.
@@ -727,7 +732,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 ```
 main.go                        // embed frontend/dist, mode dispatch before application.New (--uninstall-helper, --remove-data), window, wiring
 internal/
-  buildinfo/                   // Version, Channel (ldflags), the channels' product names and UNINST_KEY_NAMEs
+  buildinfo/                   // Version, Channel (ldflags), the channels' UNINST_KEY_NAMEs
   datadirs/                    // Layout (%LOCALAPPDATA%\VexWaveData\{bin, <channel>\webview, <channel>\imports}), RemoveData rule, LockBin (bin\.lock)
   platform/                    // Command(): CREATE_NO_WINDOW + HideWindow, PATH appended last
   netx/                        // For(proxy): cached API + stream clients; httpproxy ProxyFunc; OnProxyConnectResponse → ProxyAuthError; Unreachable text
@@ -744,7 +749,7 @@ internal/
   search/                      // SearchService (bound): Search; rank.go (pure, cases.Fold) + rank_test.go + testdata/{pages,ranked}.json
   presence/                    // PresenceService (bound): SetEnabled, SetNowPlaying; actor; pipe via go-winio (§3.7)
   update/                      // UpdateService (bound): app.Updater + GitHub provider (ChecksumAsset, HTTPClient from netx)
-  uninstall/                   // UninstallService (bound): Removable, Start; helper.go (spawn with breakaway fallback)
+  uninstall/                   // UninstallService (bound): Removable, Start; the --uninstall-helper and --remove-data modes; InstallDir, which the updater's installed-copy check shares
   events/                      // RegisterEvent[...] calls + payload structs (the import:* events live in importer: their payload carries upload.Staged, and upload → session → events would be a cycle)
 ```
 
@@ -777,7 +782,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `search` | `port-sandbox/gotests/search`, `port-sandbox/gotests/ranking` | `search_test.go`; `rank_test.go` against `testdata/pages.json` (the sandbox's `all-pages.json`: 20 real + 11 synthetic pages) and the golden `testdata/ranked.json` (§3.5), written with `go test -update` after the fold variant again matched TS on 29/31 pages, the two differences being the improvements in §3.5 |
 | `presence` | `port-sandbox/gotests/presence`, `port-sandbox/gotests/pipe` | `presence_test.go`, with the fake Discord on a real pipe; `pipe_test.go`'s findings are superseded by §3.7's transport bullet |
 | `platform` | `port-sandbox/gotests/winproc` | `winproc_test.go`, `env_test.go`, `ytdlp_test.go` |
-| `update` | `port-sandbox/gotests/updatertest` | `updater_test.go` |
+| `update` | `port-sandbox/gotests/updatertest` | `update_test.go`, through `UpdateService` against the fake GitHub; the sandbox's `PublicKey` case stays there, as no key is configured (§5) |
 | `backend.Nullable`, error shape | `port-sandbox/app/probe.go` | the `port-sandbox/cdp/probe-bridge.ts` checks |
 | `contract/gen-limits.ts` | `port-sandbox/limits/gen.ts` | CI drift check for both generated files |
 
