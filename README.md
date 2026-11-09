@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="assets/vex-logo.png" alt="VexWave" width="112">
+<img src="build/appicon.png" alt="VexWave" width="112">
 
 # VexWave
 
 **A desktop music player conntected to your server.**
 
 <p>
-  <a href="https://framework.blackboard.sh/electrobun/"><img alt="Electrobun" src="https://img.shields.io/badge/Electrobun-8B3DEE?style=flat-square"></a>
-  <a href="https://bun.sh"><img alt="Bun" src="https://img.shields.io/badge/Bun-A231FF?style=flat-square"></a>
+  <a href="https://v3.wails.io"><img alt="Wails" src="https://img.shields.io/badge/Wails-8B3DEE?style=flat-square"></a>
+  <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/Go-A231FF?style=flat-square"></a>
   <a href="https://react.dev"><img alt="React" src="https://img.shields.io/badge/React-6C3BD1?style=flat-square"></a>
   <a href="https://www.typescriptlang.org"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-41188F?style=flat-square"></a>
 </p>

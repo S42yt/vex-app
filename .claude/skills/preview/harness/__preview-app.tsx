@@ -1,7 +1,7 @@
 ﻿/**
  * Renders the real `<App/>` against whatever state you put in the DATA section
- * below. Copied into `src/mainview/` by `render.ts` for the length of a run and
- * deleted afterwards, which is why it can sit at the vite root and use `@/`.
+ * below. Copied into `frontend/src/` by `render.ts` for the length of a run and
+ * deleted afterwards, which is why it can import `./App` and use `@/`.
  *
  * **The data below is an example, not a fixture â€” rewrite it for whatever is
  * being previewed.** A long queue, an empty library, an artist with one track,
@@ -49,7 +49,7 @@ import type {
 	MediaSearchResult,
 	RemoteArtist,
 	RemoteTrack,
-} from "../shared/rpcSchema";
+} from "@/api/types";
 import "./index.css";
 import App from "./App";
 
@@ -279,6 +279,10 @@ const SESSION: SessionState = {
 	status: "loggedIn",
 	error: null,
 	lastServerUrl: "",
+	proxyUrl: "",
+	proxyError: null,
+	savingProxy: false,
+	proxyRetryAfter: null,
 	restoring: false,
 	retryAfter: null,
 };

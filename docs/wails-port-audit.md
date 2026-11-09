@@ -29,7 +29,7 @@ These bind every porting session.
 The port starts on a new branch from a **fresh `wails3 init -t react` project** (v3.1.0), not by converting the Electrobun project in place.
 - **Branch from `main`**, after `6ba637c`, the commit that adds `docs/` and `port-sandbox/` (below: the *reference commit*). Shared history lets the finished port land on `main` as an ordinary merge, and the Electrobun history stays in `git log`. An orphan branch would need `--allow-unrelated-histories` to merge.
 - **First commit:** delete the Electrobun tree, except what the table below carries over. Generate the template into the repo root. Add the root `.gitattributes` and `CLAUDE.md` (below), then run `git add --renormalize .` so every committed text file is LF.
-- **Trim the template the way `port-sandbox/app` was trimmed:** delete the non-Windows build assets, give `generate:icons` `-macfilename ""`, and delete the demo service, the demo images and the template's styles.
+- **Trim the template the way `port-sandbox/app` was trimmed:** delete the non-Windows build assets, give `generate:icons` `-macfilename ""`, and delete the demo service, the demo images and the template's styles. In the root `Taskfile.yml`, `APP_NAME` is `VexWave` (the template lowercases it) and `PACKAGE_MANAGER` defaults to `bun`.
 
 ### Names
 
@@ -90,7 +90,7 @@ The Go side is new code. It starts from the sandbox packages (Ground rules 7) an
 | `README.md`, `assets/*.png` screenshots | same paths | The stack badges are updated. |
 | `docs/wails-port-audit.md` | same path | The spec (Ground rules 3, 8). |
 
-**Frontend toolchain:** start from the template's `frontend/package.json`, which brings Vite, `@vitejs/plugin-react` and the Wails Vite plugin at the versions v3.1.0 was tested with. Add the app's runtime dependencies at their current `package.json` versions, and keep TypeScript at the repo's version. Whether the UI builds unchanged on that toolchain is checked in the first commit (§7).
+**Frontend toolchain:** start from the template's `frontend/package.json`, which brings Vite, `@vitejs/plugin-react` and the Wails Vite plugin at the versions v3.1.0 was tested with. Add the app's runtime dependencies at their current `package.json` versions, and keep TypeScript at the repo's version. Checked in the first commit: `wails3 build` and `bunx tsc --noEmit` pass, and the preview skill's library and settings renders are byte-identical to the reference checkout's (discover differs only by its download spinner, which never renders the same twice).
 
 **Not carried over:**
 - **`src/bun/**`:** reimplemented in Go.
@@ -98,7 +98,7 @@ The Go side is new code. It starts from the sandbox packages (Ground rules 7) an
 - **`scripts/fuse-installer.ts`, `scripts/stamp-win-icons.ts` and `scripts/tsconfig.json`:** the second TS project exists only because bun's globals collide with the DOM lib.
 - **`assets/vex-logo.ico`:** generated from `appicon.png`.
 - **The root `package.json`, `bun.lock`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.js` and `postcss.config.js`:** replaced by `frontend/`'s, with content globs and the `@/` alias pointing at `frontend/src`. These packages leave: `electrobun`, `rcedit`, `@types/three`, `@types/bun`, `music-metadata`.
-- **`.gitignore`:** the template's, plus `/preview/` for the preview skill's output.
+- **`.gitignore`:** the template's, plus `/preview/` for the preview skill's output and `contract/node_modules`.
 - **All four `CLAUDE.md` files.** They describe the Electrobun app. The replacement is below.
 - **`port-sandbox/`:** stays on `main`. Its probe app, CDP harness, ranking capture and music-metadata comparison need the old app's sources and root `node_modules`, so they run from the reference checkout.
 
@@ -783,7 +783,6 @@ Every claim in this report that is not yet proven is listed here. Other sections
 | Item | Why it isn't verified yet | Area / phase | How to test |
 |---|---|---|---|
 | **Renderer crash with playback + `/head` + Web Audio** (§8) | Seen 3 times with one early probe, never reproduced since | First phase: the media server and the player | Manual check on a production build (`-tags production`) against the real backend, with the dev-flag CDP port on (§3.8). Turn Drive on in the player bar's effects popover (effects reset every launch, and the `/head` scan only runs while Drive is above 0, `Drive.ts:166-168`). Then start a track that isn't cached yet, so playback, the `/head` decode and the Web Audio graph start together. Skip to the next uncached track, and repeat 10 times on each of 3 tracks. Watch for a blank or reloaded webview, and attach Playwright with `page.on("crash")` as `port-sandbox/cdp/probe-audio.ts` does (run from the reference checkout). Repeat once at 125 % scaling. |
-| **The current UI on the template's frontend toolchain** | The sandbox built only the template's own frontend. The UI uses Tailwind 3 via PostCSS and TypeScript at the repo's version on top of the template's Vite and React plugin | First commit (Port setup) | `PACKAGE_MANAGER=bun wails3 build` succeeds, and `bunx tsc --noEmit` passes in `frontend/`. Render the main views with the preview skill and compare them against the same renders from the reference checkout. |
 | **NSIS installer and uninstaller** | `makensis` isn't installed on the reference machine | Packaging (§3.10, §3.11) | Stable only for now (§5). Install NSIS, then run `wails3 package`. Install stable: check `Programs\VexWave` and its HKCU Uninstall key with `UninstallString`. Uninstall it once from Settings → Apps and once with the in-app button: `Programs\VexWave` and `VexWaveData` are gone each time. Also check that `--remove-data` ran before `RMDir /r $INSTDIR`, and that no `%APPDATA%\<exe>` profile is created. |
 | **Updater exe swap and relaunch** | Needs two builds and a relaunch; only Check → Download → Verify → Stage ran | Updater (§3.9) | Install build N from NSIS. Point `github.Config` at a test repository (or the fake API from `updatertest`) that serves build N+1 plus `SHA256SUMS`. Then `Restart()`: the new version runs from the same folder, the `wails-update-*` staging is cleaned up, and a broken N+1 rolls back. Run once launched from the Start menu shortcut, which puts the app in Explorer's job. |
 | **Live Discord** | Discord isn't installed on the reference machine | Presence (§3.7) | With Discord running, check the handshake, the card while playing, the nonce reply when activity privacy is off (refused activity), and that the card clears on toggle-off and on quit. Restarting Discord must reconnect within the 10 s sweep. |

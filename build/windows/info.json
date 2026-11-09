@@ -1,0 +1,17 @@
+{
+	"fixed": {
+		"file_version": "0.6.1",
+		"product_version": "0.6.1"
+	},
+	"info": {
+		"0409": {
+			"FileVersion": "0.6.1",
+			"ProductVersion": "0.6.1",
+			"CompanyName": "realChriss",
+			"FileDescription": "A desktop music player",
+			"LegalCopyright": "© 2026, realChriss",
+			"ProductName": "VexWave",
+			"Comments": "(c) 2026 realChriss"
+		}
+	}
+}

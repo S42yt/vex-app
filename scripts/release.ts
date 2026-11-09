@@ -1,11 +1,10 @@
 // Cuts a release: picks the next version, points a tag at main's current commit
 // and pushes it. Pushing that tag is the only thing that builds stable, so this
-// script is the whole release procedure. Run: bun run release
+// script is the whole release procedure. Run: bun scripts/release.ts
 import { $ } from "bun";
 
-const CONFIG = "electrobun.config.ts";
-// The same line the workflow rewrites from the tag. Kept in step so a checkout
-// of the tag reports the version that was built from it.
+const CONFIG = "build/config.yml";
+// info.version: the first double-quoted `version:`. The file's own `version: '3'` is single-quoted.
 const VERSION_LINE = /^(\s*version:\s*)"[^"]*"/m;
 const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)$/;
 
