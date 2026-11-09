@@ -1,7 +1,11 @@
-// Sets the app version in build/config.yml and in build/windows/info.json, the version
-// resource the exe carries and the updater compares. Run: bun scripts/set-version.ts 1.2.3
+// Sets the app version everywhere a build reads it: build/config.yml, the exe's version resource
+// (info.json, which the updater compares), its manifest, and the installer's version and the
+// DisplayVersion it registers (wails_tools.nsh). Run: bun scripts/set-version.ts 1.2.3
 const CONFIG = "build/config.yml";
 const INFO = "build/windows/info.json";
+const MANIFEST = "build/windows/wails.exe.manifest";
+const NSIS_TOOLS = "build/windows/nsis/wails_tools.nsh";
+export const VERSION_FILES = [CONFIG, INFO, MANIFEST, NSIS_TOOLS];
 // info.version: the first double-quoted `version:`. The file's own `version: '3'` is single-quoted.
 const VERSION_LINE = /^(\s*version:\s*)"[^"]*"/m;
 
@@ -16,6 +20,15 @@ export async function setVersion(version: string): Promise<void> {
 		lang.FileVersion = lang.ProductVersion = version;
 	}
 	await Bun.write(INFO, JSON.stringify(info, null, "\t"));
+
+	await replaceOnce(MANIFEST, /(<assemblyIdentity [^>]*\bversion=")[^"]*"/, `$1${version}"`);
+	await replaceOnce(NSIS_TOOLS, /(!define INFO_PRODUCTVERSION ")[^"]*"/, `$1${version}"`);
+}
+
+async function replaceOnce(path: string, pattern: RegExp, replacement: string): Promise<void> {
+	const text = await Bun.file(path).text();
+	if (!pattern.test(text)) throw new Error(`No version found in ${path}.`);
+	await Bun.write(path, text.replace(pattern, replacement));
 }
 
 if (import.meta.main) {

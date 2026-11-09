@@ -2,10 +2,9 @@
 // and pushes it. Pushing that tag is the only thing that builds stable, so this
 // script is the whole release procedure. Run: bun scripts/release.ts
 import { $ } from "bun";
-import { setVersion } from "./set-version";
+import { setVersion, VERSION_FILES } from "./set-version";
 
 const CONFIG = "build/config.yml";
-const INFO = "build/windows/info.json";
 const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)$/;
 
 function fail(message: string): never {
@@ -87,7 +86,7 @@ const bumpsConfig = configVersion !== version;
 
 console.log(`\n  This will:`);
 if (bumpsConfig) {
-	console.log(`    - set ${CONFIG} and ${INFO} to ${version} and commit them`);
+	console.log(`    - set ${VERSION_FILES.join(", ")} to ${version} and commit them`);
 }
 if (ahead || bumpsConfig) {
 	console.log(`    - push main to origin`);
@@ -103,7 +102,7 @@ if ((prompt(`\n  Release ${tag}? [y/N]:`) ?? "").trim().toLowerCase() !== "y") {
 
 if (bumpsConfig) {
 	await setVersion(version);
-	await $`git add ${CONFIG} ${INFO}`.quiet();
+	await $`git add ${VERSION_FILES}`.quiet();
 	await $`git commit -m ${`Set the version to ${version}`}`.quiet();
 	console.log(`\n  Committed the version bump.`);
 }
