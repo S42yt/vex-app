@@ -9,7 +9,7 @@ Renders the **real `<App/>`** — the actual components, not a mockup — agains
 state you write, framed in a Windows window, as a transparent PNG.
 
 The app can't be photographed directly: it needs a live backend login before any
-view is on screen, Discover needs a live yt-dlp search, and Electrobun's window
+view is on screen, Discover needs a live yt-dlp search, and the Wails window
 isn't reachable headlessly. So the components are mounted in a browser with their
 stores replaced.
 
@@ -21,7 +21,7 @@ stores replaced.
 2. **Write the data.** `harness/__preview-app.tsx` has a `DATA` section: track
    list, artists, playlists, search results, what's playing, the EQ curve. It
    ships with a small example — **replace it**, don't work around it. Check the
-   state types in `src/mainview/api/` if you're unsure what a store holds; the
+   state types in `frontend/src/api/` if you're unsure what a store holds; the
    file imports them, so the type-check will tell you either way.
 3. **Render**, and **look at every PNG**. Nothing in the pipeline knows what the
    picture is supposed to show — that check is yours.
@@ -41,7 +41,7 @@ detail view and writes `playlists-1.png`.
 | `--out=preview` | where the PNGs go. `--out=assets` when they're being kept. |
 | `--scale=1.5` | 1.5 → 1800×1188 |
 | `--no-check` | skip the type-check (below). Only while iterating. |
-| `--keep` | leave the harness in `src/mainview/` and the vite URL usable, to poke at |
+| `--keep` | leave the harness in `frontend/src/` and the vite URL usable, to poke at |
 | `--still` | freeze the now-playing bars, which is what makes a render byte-reproducible |
 
 A run is about 16 seconds, 10 of them the type-check.
@@ -68,7 +68,7 @@ project the library through those indices, which `LibraryService` builds from a
 real payload and so are empty behind a stubbed snapshot.
 
 The type-check is the safety net for all of this, which is why it is on by
-default: the harness is copied into `src/mainview/` for the run, so `tsc` sees it
+default: the harness is copied into `frontend/src/` for the run, so `tsc` sees it
 against the app's real types and a store that changed shape is a compile error
 rather than a wrong picture.
 
@@ -84,10 +84,7 @@ branches of that measurement.
 1200×760 **iframe**. The iframe isn't decoration: the app is `h-screen`, and only
 inside an iframe does that resolve against something other than the whole page.
 
-`harness/__preview-app.html` sets `window.__electrobun = {}` in a classic script
-before the module loads — anything importing a service pulls in `api/rpc.ts` →
-Electrobun's view bridge, which writes onto that object and otherwise throws
-before the first render. It also **zeroes every CSS transition**: a picture wants
+`harness/__preview-app.html` **zeroes every CSS transition**: a picture wants
 the settled state, and the player bar's cover backdrop cross-fades for 700 ms
 behind a two-frame gate, so whether the capture landed before or after it used to
 be a coin toss. Keyframe animations are left alone.
@@ -107,7 +104,7 @@ be a coin toss. Keyframe animations are left alone.
 Per shot: the file exists, is `rgba`, is the expected size, has a **transparent
 corner** (an opaque one means the backdrop broke), and the DOM contains the app
 bar's log-out action — which proves `<App/>` mounted rather than the page being
-blank or thrown. It also reports if the app's window size in `src/bun/index.ts`
+blank or thrown. It also reports if the app's window size in `main.go`
 has drifted from what the harness frames.
 
 Nothing is published to `--out` until every shot has passed, so a failed run
@@ -122,7 +119,7 @@ Look at the images.
 - Chrome is not installed; Edge is at `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`.
 - ffmpeg is the only image tool here — no ImageMagick, and `convert` on PATH is
   Windows' FAT tool.
-- `render.ts` is outside both tsconfig projects, so nothing type-checks it. Read
+- `render.ts` is outside every tsconfig project, so nothing type-checks it. Read
   it if it misbehaves.
 - Byte-reproducibility: views with no animation are identical run to run;
   anything showing the now-playing bars needs `--still`; a Discover download

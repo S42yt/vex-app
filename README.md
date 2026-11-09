@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="assets/vex-logo.png" alt="VexWave" width="112">
+<img src="build/appicon.png" alt="VexWave" width="112">
 
 # VexWave
 
-**A desktop music player conntected to your server.**
+**A desktop music player connected to your server.**
 
 <p>
-  <a href="https://framework.blackboard.sh/electrobun/"><img alt="Electrobun" src="https://img.shields.io/badge/Electrobun-8B3DEE?style=flat-square"></a>
-  <a href="https://bun.sh"><img alt="Bun" src="https://img.shields.io/badge/Bun-A231FF?style=flat-square"></a>
+  <a href="https://v3.wails.io"><img alt="Wails" src="https://img.shields.io/badge/Wails-8B3DEE?style=flat-square"></a>
+  <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/Go-A231FF?style=flat-square"></a>
   <a href="https://react.dev"><img alt="React" src="https://img.shields.io/badge/React-6C3BD1?style=flat-square"></a>
   <a href="https://www.typescriptlang.org"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-41188F?style=flat-square"></a>
 </p>
@@ -40,7 +40,7 @@
 | **Your library** | Your whole collection lives on your own server. |
 | **Import from a link** | Add a track directly from a YouTube or SoundCloud URL. |
 | **Discover** | Search YouTube and SoundCloud in-app and load them into your library. |
-| **Equalizer** | Ten sliders to shape the sound |
+| **Equalizer** | Ten sliders to shape the sound. |
 | **Effects** | Adjust the speed, drive and reverb. |
 | **Discord Rich Presence** | Put what you're listening to on your profile. |
 
@@ -52,7 +52,7 @@
 
 ### From a release
 
-Download `VexWave-Setup.exe` from the **[latest release](https://github.com/VexWave/vex-app/releases/latest)**
+Download `VexWave-installer.exe` from the **[latest release](https://github.com/VexWave/vex-app/releases/latest)**
 and run it.
 
 > [!NOTE]
@@ -60,16 +60,18 @@ and run it.
 
 ### From source
 
-Needs **[Bun](https://bun.sh) 1.3+**.
+Windows only. Needs **[Go](https://go.dev) 1.27**, **[Bun](https://bun.sh) 1.4+** and the
+**[Wails](https://v3.wails.io) v3.1.0** CLI. The installer also needs **[NSIS](https://nsis.sourceforge.io)**
+(`makensis` on `PATH`).
 
 ```sh
 git clone https://github.com/VexWave/vex-app.git
 cd vex-app
-bun install
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 ```
 
 | Command | What it does |
 | --- | --- |
-| `bun run dev:hmr` | Develop, with Vite HMR |
-| `bun run start` | Build and run from bundled assets |
-| `bun run build:installer:stable` | Build `installers/VexWave-Setup.exe` |
+| `wails3 task dev` | Develop, with Vite HMR |
+| `wails3 task build` | Build `bin/VexWave.exe` |
+| `wails3 task package EXTRA_TAGS=stable` | Build the stable `bin/VexWave-amd64-installer.exe` |

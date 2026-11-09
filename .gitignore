@@ -1,7 +1,8 @@
-node_modules/
-build/
-dist/
-artifacts/
-installers/
+.task
+.wails
+bin
+frontend/dist
+frontend/node_modules
 /preview/
-*.tsbuildinfo
+contract/node_modules
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe

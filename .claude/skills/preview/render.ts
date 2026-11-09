@@ -12,7 +12,7 @@
  * --keep (leave the harness in src/) · --still (see below).
  *
  * What it renders is entirely `harness/__preview-app.tsx`'s business; nothing
- * about the data lives here. This file is outside both tsconfig projects, so
+ * about the data lives here. This file is outside every tsconfig project, so
  * nothing type-checks it — the harness it copies is checked, by default.
  */
 import { mkdir, copyFile, rm, readdir } from "node:fs/promises";
@@ -24,8 +24,9 @@ import { fileURLToPath } from "node:url";
 const SKILL_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(SKILL_DIR, "../../..");
 const HARNESS = join(SKILL_DIR, "harness");
-/** The harness has to sit at the vite root to reach `@/` and `/index.css`. */
-const VITE_ROOT = join(REPO, "src/mainview");
+const FRONTEND = join(REPO, "frontend");
+/** The harness sits beside `App.tsx` so the type-check covers it. */
+const VITE_ROOT = join(FRONTEND, "src");
 
 /**
  * The window the frame page draws: a 32px title bar over the app's 1200x760
@@ -92,7 +93,7 @@ const expected = {
 // --- helpers ---------------------------------------------------------------
 
 async function run(cmd: string[]): Promise<{ ok: boolean; output: string }> {
-	const proc = Bun.spawn(cmd, { cwd: REPO, stdout: "pipe", stderr: "pipe" });
+	const proc = Bun.spawn(cmd, { cwd: FRONTEND, stdout: "pipe", stderr: "pipe" });
 	const [stdout, stderr, code] = await Promise.all([
 		new Response(proc.stdout).text(),
 		new Response(proc.stderr).text(),
@@ -117,7 +118,7 @@ async function freePort(from = 5300): Promise<number> {
 async function waitForServer(port: number): Promise<void> {
 	for (let attempt = 0; attempt < 100; attempt++) {
 		try {
-			const res = await fetch(`http://localhost:${port}/__preview.html`);
+			const res = await fetch(`http://localhost:${port}/src/__preview.html`);
 			if (res.ok) return;
 		} catch {
 			// not listening yet
@@ -174,7 +175,7 @@ async function dumpDom(port: number, query: string, profile: string): Promise<st
 			`--user-data-dir=${profile}`,
 			"--virtual-time-budget=20000",
 			"--dump-dom",
-			`http://localhost:${port}/__preview-app.html?${query}`,
+			`http://localhost:${port}/src/__preview-app.html?${query}`,
 		],
 		{ stdout: "pipe", stderr: "ignore" },
 	);
@@ -189,9 +190,9 @@ async function dumpDom(port: number, query: string, profile: string): Promise<st
  * stop being a picture of the app — so it is reported rather than enforced.
  */
 async function windowDrift(): Promise<string | null> {
-	const source = await Bun.file(join(REPO, "src/bun/index.ts")).text();
-	const size = /width:\s*(\d+),\s*height:\s*(\d+)/.exec(source);
-	if (!size) return "could not read the window size out of src/bun/index.ts";
+	const source = await Bun.file(join(REPO, "main.go")).text();
+	const size = /width:\s*(\d+),\s*height:\s*(\d+)/i.exec(source);
+	if (!size) return "could not read the window size out of main.go";
 	const [, width, height] = size;
 	// The app's height includes its frame; the harness draws a 32px title bar
 	// over the client area, so a few px of difference is the border, not drift.
@@ -209,7 +210,7 @@ if (!EDGE) {
 	);
 }
 
-const scratch = join(REPO, "node_modules/.cache/preview");
+const scratch = join(FRONTEND, "node_modules/.cache/preview");
 await rm(scratch, { recursive: true, force: true });
 await mkdir(scratch, { recursive: true });
 await mkdir(outDir, { recursive: true });
@@ -232,7 +233,7 @@ try {
 	// stderr inherited rather than piped: an unread pipe eventually blocks the
 	// server, and vite's complaints are the only clue when it won't come up.
 	vite = Bun.spawn(["bunx", "vite", "--port", String(port)], {
-		cwd: REPO,
+		cwd: FRONTEND,
 		stdout: "ignore",
 		stderr: "inherit",
 	});
@@ -270,7 +271,7 @@ try {
 				"--run-all-compositor-stages-before-draw",
 				...(still ? ["--force-prefers-reduced-motion=reduce"] : []),
 				`--screenshot=${raw}`,
-				`http://localhost:${port}/__preview.html?${query}`,
+				`http://localhost:${port}/src/__preview.html?${query}`,
 			]);
 			if (!existsSync(raw)) {
 				throw new Error(`${shot.name}: Edge wrote no file\n${edge.output}`);
@@ -295,7 +296,7 @@ try {
 				!dom.includes(MOUNTED) &&
 					`the app never rendered — no "${MOUNTED}" in the DOM. A view name the ` +
 						`app no longer has, a stub that throws, or a vite error; run with ` +
-						`--keep and open /__preview-app.html?${query} to see it`,
+						`--keep and open /src/__preview-app.html?${query} to see it`,
 			].filter(Boolean);
 			if (problems.length) throw new Error(`${shot.name}: ${problems.join("; ")}`);
 

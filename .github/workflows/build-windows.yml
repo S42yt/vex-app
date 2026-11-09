@@ -1,107 +1,66 @@
 name: Build (Windows)
 
-# A tag is the only thing that ships, so it is the only thing that builds by
-# itself. Pushing to main costs nothing; a canary build is there for the asking.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
 
-# Any job starts with no token scope and must ask for what it needs.
 permissions: {}
 
 jobs:
   build:
-    # Electrobun builds only for the host platform, so a Windows app needs a Windows runner.
     runs-on: windows-latest
 
-    # For the release step; the default token is read-only.
     permissions:
       contents: write
 
     steps:
-      # Third-party actions are pinned to commit SHAs, not tags. A tag is mutable:
-      # whoever controls the action repo can repoint it, and that is how the
-      # tj-actions/changed-files compromise reached every workflow at once.
-      # Bump these deliberately; the trailing comment is the version.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # Nothing here pushes; don't leave a usable token in .git/config.
           persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
 
-      - name: Cache bun install cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-cache-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-cache-${{ runner.os }}-
+      - run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
+          "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bun scripts/set-version.ts ${{ github.ref_name }}
 
       - run: bun install --frozen-lockfile
+        working-directory: frontend
 
-      # The electrobun npm package ships no platform binaries: its CLI downloads
-      # the core and CEF tarballs (~500 MB extracted) from GitHub releases on first
-      # run. Restored after install, which owns that same directory. Keyed on the
-      # lockfile, so an electrobun bump re-downloads and nothing else does.
-      - name: Cache electrobun platform binaries
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - run: wails3 task package EXTRA_TAGS=stable
+
+      - name: Name the release assets
+        shell: bash
+        run: |
+          mkdir release
+          cp bin/VexWave.exe release/VexWave-windows-amd64.exe
+          cp bin/VexWave-amd64-installer.exe release/VexWave-installer.exe
+          (cd release && sha256sum VexWave-windows-amd64.exe VexWave-installer.exe > SHA256SUMS)
+          cat release/SHA256SUMS
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          path: node_modules/electrobun/dist-win-x64
-          key: electrobun-dist-win-x64-${{ hashFiles('bun.lock') }}
-
-      # Two projects: the root config's DOM lib collides with bun's globals.
-      - name: Type-check
-        run: |
-          bunx tsc --noEmit
-          bunx tsc --noEmit -p scripts
-
-      # A tag is a release and builds stable. A manual run builds canary, which
-      # carries its own identifier and installs beside a stable copy rather than
-      # over it. One channel per run, never both.
-      - name: Pick channel
-        shell: pwsh
-        run: |
-          $channel = if ("${{ github.ref }}".StartsWith("refs/tags/v")) { "stable" } else { "canary" }
-          "CHANNEL=$channel" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Building the $channel channel"
-
-      # electrobun.config.ts is the only place the packaged version comes from —
-      # the CLI reads no env override and never looks at package.json.
-      - name: Set version from tag
-        if: env.CHANNEL == 'stable'
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
-          $config = Get-Content electrobun.config.ts -Raw
-          $config = $config -replace '(?m)^(\s*version:\s*)"[^"]*"', "`${1}""$version"""
-          Set-Content electrobun.config.ts -Value $config -Encoding utf8 -NoNewline
-          Write-Host "Building version $version"
-
-      # Builds the UI, then the installer set — a 0.4 MB extractor stub plus the
-      # archive it reads from beside itself — and folds that set into one
-      # executable carrying its own payload, in installers/.
-      - run: bun run build:installer:${{ env.CHANNEL }}
-
-      # upload-artifact always zips what it is given, so the Actions download is
-      # one zip holding the exe. The release asset below is not wrapped and hands
-      # over the exe directly.
-      - name: Upload installer
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: VexWave-Setup-${{ env.CHANNEL }}-win-x64
-          path: installers/*.exe
+          name: VexWave-win-x64
+          path: release/
           if-no-files-found: error
-          # The payload inside is already zstd-compressed; squeezing it again
-          # buys nothing and costs minutes.
-          compression-level: 0
 
-      # Only the stable channel reaches the releases page; canary stays a
-      # download on the run that produced it.
       - name: Publish release
-        if: env.CHANNEL == 'stable'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          files: installers/VexWave-Setup.exe
+          files: release/*

@@ -3,13 +3,6 @@
   <head>
     <meta charset="UTF-8" />
     <title>VexWave</title>
-    <!-- A classic script, so it runs before the deferred module below: anything
-         importing a service pulls in api/rpc.ts → Electrobun's view bridge,
-         which writes `receiveMessageFromBun` onto this object and otherwise
-         throws before the first render, leaving a blank page. -->
-    <script>
-      window.__electrobun = {};
-    </script>
     <style>
       /* A preview wants the settled state, and a transition is by definition not
          it. The player bar's cover backdrop cross-fades for 700ms behind a
@@ -27,6 +20,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/__preview-app.tsx"></script>
+    <script type="module" src="/src/__preview-app.tsx"></script>
   </body>
 </html>

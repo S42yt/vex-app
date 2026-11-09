@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MsixPackagingToolTemplate
+    xmlns="http://schemas.microsoft.com/msix/packaging/msixpackagingtool/template/2022">
+    <Settings
+        AllowTelemetry="false"
+        ApplyACLsToPackageFiles="true"
+        GenerateCommandLineFile="true"
+        AllowPromptForPassword="false">
+    </Settings>
+    <Installer
+        Path="vexwave.exe"
+        Arguments=""
+        InstallLocation="C:\Program Files\realChriss\VexWave">
+    </Installer>
+    <PackageInformation
+        PackageName="VexWave"
+        PackageDisplayName="VexWave"
+        PublisherName="CN=realChriss"
+        PublisherDisplayName="realChriss"
+        Version="0.6.1.0"
+        PackageDescription="A desktop music player">
+        <Capabilities>
+            <Capability Name="runFullTrust" />
+            
+        </Capabilities>
+        <Applications>
+            <Application
+                Id="app.vexwave"
+                Description="A desktop music player"
+                DisplayName="VexWave"
+                ExecutableName="vexwave.exe"
+                EntryPoint="Windows.FullTrustApplication">
+                
+            </Application>
+        </Applications>
+        <Resources>
+            <Resource Language="en-us" />
+        </Resources>
+        <Dependencies>
+            <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+        </Dependencies>
+        <Properties>
+            <Framework>false</Framework>
+            <DisplayName>VexWave</DisplayName>
+            <PublisherDisplayName>realChriss</PublisherDisplayName>
+            <Description>A desktop music player</Description>
+            <Logo>Assets\AppIcon.png</Logo>
+        </Properties>
+    </PackageInformation>
+    <SaveLocation PackagePath="vexwave.msix" />
+    <PackageIntegrity>
+        <CertificatePath></CertificatePath>
+    </PackageIntegrity>
+</MsixPackagingToolTemplate>
