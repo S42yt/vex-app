@@ -1,0 +1,17 @@
+{
+  "name": "cdp",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "typecheck": "bun check"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "playwright-core": "1.56.1"
+  }
+}
