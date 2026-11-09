@@ -481,6 +481,7 @@ The login stays in `localStorage` (`storage.ts:75-79`) and is pushed to Go with 
   - renaming the exe doesn't log users out;
   - a roaming domain profile doesn't carry the WebView2 cache;
   - uninstalling a channel removes its login with `VexWaveData\<channel>\` (§3.11).
+- **`wails3 dev` has its own login:** it loads the page from `http://wails.localhost:<vite port>` (9245, `Taskfile.yml`), not `http://wails.localhost` (`wails:v3/internal/assetserver/assetserver.go:167-194`). `localStorage` is per origin, so the same `dev` profile holds one login for `wails3 dev` and another for a built dev exe.
 - **Remote debugging:** `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` has no effect on a Wails app. Wails always passes `--disable-features=msSmartScreenProtection` through the API (`wails:v3/pkg/application/webview_window_windows.go:2586-2605`), and the debugging port never appeared on the browser command line. Use `Windows.AdditionalBrowserArgs: []string{"--remote-debugging-port=N"}` behind a dev flag: the `VEXWAVE_CDP_PORT` environment variable, honoured only by `dev` builds. Port 9222 is held by a system service on this machine, so pick another.
 
 ### 3.9 App updater — **med**
