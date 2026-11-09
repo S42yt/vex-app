@@ -1,0 +1,387 @@
+// Package binaries installs and updates the managed tools in VexWaveData\bin: yt-dlp,
+// ffmpeg/ffprobe and deno.
+package binaries
+
+import (
+	"archive/zip"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/VexWave/vex-app/internal/busy"
+	"github.com/VexWave/vex-app/internal/datadirs"
+	"github.com/VexWave/vex-app/internal/events"
+	"github.com/VexWave/vex-app/internal/netx"
+	"github.com/VexWave/vex-app/internal/platform"
+)
+
+type Name string
+
+const (
+	YtDlp  Name = "ytDlp"
+	FFmpeg Name = "ffmpeg"
+	Deno   Name = "deno"
+)
+
+var all = []Name{YtDlp, FFmpeg, Deno}
+
+type file struct{ entry, dest string }
+
+type part struct {
+	url   string
+	zip   bool
+	files []file
+}
+
+func parts(n Name) []part {
+	arm := runtime.GOARCH == "arm64"
+	switch n {
+	case YtDlp:
+		exe := "yt-dlp.exe"
+		if arm {
+			exe = "yt-dlp_arm64.exe"
+		}
+		return []part{{"https://github.com/yt-dlp/yt-dlp/releases/latest/download/" + exe, false, []file{{"", "yt-dlp.exe"}}}}
+	case FFmpeg:
+		variant := "win64"
+		if arm {
+			variant = "winarm64"
+		}
+		folder := "ffmpeg-master-latest-" + variant + "-gpl"
+		return []part{{"https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/" + folder + ".zip", true,
+			[]file{{folder + "/bin/ffmpeg.exe", "ffmpeg.exe"}, {folder + "/bin/ffprobe.exe", "ffprobe.exe"}}}}
+	default:
+		// No arm64 Windows build is published; x64 runs under emulation.
+		return []part{{"https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip", true, []file{{"deno.exe", "deno.exe"}}}}
+	}
+}
+
+func expected(n Name) []string {
+	switch n {
+	case YtDlp:
+		return []string{"yt-dlp.exe"}
+	case FFmpeg:
+		return []string{"ffmpeg.exe", "ffprobe.exe"}
+	default:
+		return []string{"deno.exe"}
+	}
+}
+
+type installed struct {
+	Installed bool `json:"installed"`
+}
+
+type manifest struct {
+	YtDlp *struct {
+		Version string `json:"version,omitempty"`
+	} `json:"ytDlp,omitempty"`
+	FFmpeg *installed `json:"ffmpeg,omitempty"`
+	Deno   *installed `json:"deno,omitempty"`
+}
+
+func (m *manifest) has(n Name) bool {
+	switch n {
+	case YtDlp:
+		return m.YtDlp != nil
+	case FFmpeg:
+		return m.FFmpeg != nil
+	default:
+		return m.Deno != nil
+	}
+}
+
+// BinaryService is bound. Installs run in the background and report through binaries:* events.
+type BinaryService struct {
+	Bin    string
+	Busy   *busy.Registry
+	Events events.Emitter
+	// Proxy is the current session's proxy, for runs the webview starts without naming one.
+	Proxy func() string
+}
+
+type Status struct {
+	Installed    []Name `json:"installed"`
+	Missing      []Name `json:"missing"`
+	YtDlpVersion string `json:"ytDlpVersion,omitempty"`
+}
+
+func (b *BinaryService) GetBinaryStatus() (*Status, error) {
+	st, _ := b.status()
+	return st, nil
+}
+
+func (b *BinaryService) status() (*Status, *manifest) {
+	m := b.readManifest()
+	st := &Status{Installed: []Name{}, Missing: []Name{}}
+	for _, n := range all {
+		ok := m.has(n)
+		for _, f := range expected(n) {
+			if fi, err := os.Stat(filepath.Join(b.Bin, f)); err != nil || !fi.Mode().IsRegular() {
+				ok = false
+			}
+		}
+		if ok {
+			st.Installed = append(st.Installed, n)
+		} else {
+			st.Missing = append(st.Missing, n)
+		}
+	}
+	if slices.Contains(st.Installed, YtDlp) {
+		st.YtDlpVersion = m.YtDlp.Version
+	}
+	return st, m
+}
+
+type ProxyParams struct {
+	ProxyURL string `json:"proxyUrl,omitempty"`
+}
+
+// InstallMissingBinaries waits for another VexWave window to finish with the tools: it runs
+// at startup, before the UI can do anything else.
+func (b *BinaryService) InstallMissingBinaries(p ProxyParams) error {
+	return b.start(nil, p.ProxyURL, true)
+}
+
+func (b *BinaryService) UpdateYtDlp() error {
+	return b.start([]Name{YtDlp}, b.Proxy(), false)
+}
+
+func (b *BinaryService) start(names []Name, proxy string, wait bool) error {
+	release, err := b.Busy.Acquire(busy.Install)
+	if errors.Is(err, busy.ErrInstalling) {
+		return nil // joins the run in progress, whose events this caller also receives
+	}
+	if err != nil {
+		return err
+	}
+	go func() {
+		defer release()
+		b.run(names, proxy, wait)
+	}()
+	return nil
+}
+
+func (b *BinaryService) run(names []Name, proxy string, wait bool) {
+	current := YtDlp
+	if len(names) > 0 {
+		current = names[0]
+	}
+	err := func() error {
+		unlock, err := datadirs.LockBin(b.Bin, true, wait)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+		tmp := filepath.Join(b.Bin, ".tmp")
+		os.RemoveAll(tmp)
+		if err := os.MkdirAll(tmp, 0o755); err != nil {
+			return err
+		}
+		defer os.RemoveAll(tmp)
+		if names == nil {
+			st, _ := b.status()
+			names = st.Missing
+		}
+		for _, n := range names {
+			current = n
+			if err := b.installOne(n, tmp, proxy); err != nil {
+				return err
+			}
+			b.Events.Emit(events.BinariesInstalled, events.BinaryInstalled{Binary: string(n)})
+		}
+		return nil
+	}()
+	if err != nil {
+		b.Events.Emit(events.BinariesFailed, events.BinaryFailed{Binary: string(current), Error: err.Error()})
+		return
+	}
+	b.Events.Emit(events.BinariesFinished, events.BinariesDone{})
+}
+
+func (b *BinaryService) installOne(n Name, tmp, proxy string) error {
+	ps := parts(n)
+	for i, p := range ps {
+		dl := filepath.Join(tmp, fmt.Sprintf("%s-%d.download", n, i+1))
+		progress := func(received, total int64, step string) {
+			b.Events.Emit(events.BinariesProgress, events.BinaryProgress{
+				Binary: string(n), Step: step, ReceivedBytes: received, TotalBytes: total, Part: i + 1, PartCount: len(ps),
+			})
+		}
+		if err := download(p.url, dl, proxy, func(r, t int64) { progress(r, t, "downloading") }); err != nil {
+			return err
+		}
+		if !p.zip {
+			if err := os.Rename(dl, filepath.Join(b.Bin, p.files[0].dest)); err != nil {
+				return err
+			}
+			continue
+		}
+		progress(0, 0, "extracting")
+		if err := extract(dl, p.files, b.Bin); err != nil {
+			return err
+		}
+	}
+	m := b.readManifest()
+	switch n {
+	case YtDlp:
+		m.YtDlp = &struct {
+			Version string `json:"version,omitempty"`
+		}{b.ytDlpVersion()}
+	case FFmpeg:
+		m.FFmpeg = &installed{true}
+	default:
+		m.Deno = &installed{true}
+	}
+	return b.writeManifest(m)
+}
+
+func (b *BinaryService) ytDlpVersion() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := platform.Command(ctx, b.Bin, filepath.Join(b.Bin, "yt-dlp.exe"), "--version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+const progressEvery = 150 * time.Millisecond
+
+func download(url, target, proxy string, progress func(received, total int64)) error {
+	res, err := netx.For(proxy).Stream.Get(url)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("Download failed (HTTP %d): %s", res.StatusCode, url)
+	}
+	total := max(res.ContentLength, 0)
+	f, err := os.Create(target)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	var received int64
+	last := time.Time{}
+	buf := make([]byte, 256<<10)
+	progress(0, total)
+	for {
+		n, rerr := res.Body.Read(buf)
+		if n > 0 {
+			if _, err := f.Write(buf[:n]); err != nil {
+				return err
+			}
+			received += int64(n)
+			if time.Since(last) >= progressEvery {
+				last = time.Now()
+				progress(received, total)
+			}
+		}
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			return rerr
+		}
+	}
+	progress(received, total)
+	return f.Close()
+}
+
+// extract copies the named entries out of a zip into bin, each through a temp file and a rename.
+func extract(zipPath string, files []file, bin string) error {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer zr.Close()
+	for _, want := range files {
+		zf, err := zr.Open(want.entry)
+		if err != nil {
+			return fmt.Errorf("%s missing from %s", want.entry, filepath.Base(zipPath))
+		}
+		dest := filepath.Join(bin, want.dest)
+		tmp := dest + ".new"
+		out, err := os.Create(tmp)
+		if err == nil {
+			_, err = io.Copy(out, zf)
+			if cerr := out.Close(); err == nil {
+				err = cerr
+			}
+		}
+		zf.Close()
+		if err == nil {
+			err = os.Rename(tmp, dest)
+		}
+		if err != nil {
+			os.Remove(tmp)
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *BinaryService) manifestPath() string { return filepath.Join(b.Bin, "manifest.json") }
+
+func (b *BinaryService) readManifest() *manifest {
+	m := &manifest{}
+	if data, err := os.ReadFile(b.manifestPath()); err == nil {
+		json.Unmarshal(data, m)
+	}
+	return m
+}
+
+func (b *BinaryService) writeManifest(m *manifest) error {
+	data, err := json.MarshalIndent(m, "", "\t")
+	if err != nil {
+		return err
+	}
+	tmp := b.manifestPath() + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, b.manifestPath())
+}
+
+type YtDlpUpdate struct {
+	UpdateAvailable  bool   `json:"updateAvailable"`
+	LatestVersion    string `json:"latestVersion,omitempty"`
+	InstalledVersion string `json:"installedVersion,omitempty"`
+}
+
+const ytDlpLatest = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
+
+// CheckYtDlpUpdate answers "no update" whenever it can't tell.
+func (b *BinaryService) CheckYtDlpUpdate(ctx context.Context) YtDlpUpdate {
+	m := b.readManifest()
+	if m.YtDlp == nil || m.YtDlp.Version == "" {
+		return YtDlpUpdate{}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ytDlpLatest, nil)
+	if err != nil {
+		return YtDlpUpdate{}
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	res, err := netx.For(b.Proxy()).API.Do(req)
+	if err != nil {
+		return YtDlpUpdate{}
+	}
+	defer res.Body.Close()
+	var rel struct {
+		Tag string `json:"tag_name"`
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&rel) != nil || rel.Tag == "" || rel.Tag == m.YtDlp.Version {
+		return YtDlpUpdate{}
+	}
+	return YtDlpUpdate{UpdateAvailable: true, LatestVersion: rel.Tag, InstalledVersion: m.YtDlp.Version}
+}

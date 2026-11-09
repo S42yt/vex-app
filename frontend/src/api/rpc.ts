@@ -1,7 +1,13 @@
+import { Events } from "@wailsio/runtime";
+import * as EventNames from "../../bindings/events";
+import * as Binaries from "../../bindings/github.com/VexWave/vex-app/internal/binaries/binaryservice";
+import * as Library from "../../bindings/github.com/VexWave/vex-app/internal/library/libraryservice";
+import * as Session from "../../bindings/github.com/VexWave/vex-app/internal/session/sessionservice";
 import type {
 	AppUpdateProgressMessage,
 	AppUpdateResult,
 	BinaryProgressMessage,
+	BinaryStatus,
 	BinaryStatusResult,
 	CreateArtistParams,
 	CreatePlaylistParams,
@@ -22,7 +28,9 @@ import type {
 	PresenceMessage,
 	PresenceStatus,
 	ProxyParams,
+	RemoteLibrary,
 	RestoreSessionParams,
+	RpcFailure,
 	RpcResult,
 	SearchMediaParams,
 	SearchMediaResult,
@@ -75,14 +83,79 @@ type Messages = {
 const notPorted = (name: string) => () =>
 	Promise.reject(new Error(`${name} isn't ported yet`));
 
-export const bun = new Proxy({} as Requests, {
-	get: (_, name) => notPorted(String(name)),
+// A Go error rejects with its JSON in `cause` (backend.Failure: status, retryAfterSec, error).
+function failure(e: unknown): RpcFailure {
+	const cause = (e as { cause?: { status?: number; retryAfterSec?: number } })
+		.cause;
+	return {
+		ok: false,
+		status: cause?.status,
+		retryAfterSec: cause?.retryAfterSec,
+		error: e instanceof Error ? e.message : String(e),
+	};
+}
+
+function settle(call: Promise<unknown>): Promise<RpcResult>;
+function settle<T, R extends object>(
+	call: Promise<T>,
+	wrap: (value: T) => R,
+): Promise<({ ok: true } & R) | RpcFailure>;
+function settle(
+	call: Promise<unknown>,
+	wrap: (value: unknown) => object = () => ({}),
+): Promise<unknown> {
+	return call.then((value) => ({ ok: true, ...wrap(value) }), failure);
+}
+
+const ported: Partial<Requests> = {
+	login: (p) => settle(Session.Login(p), (token) => ({ token })),
+	restoreSession: (p) => settle(Session.RestoreSession(p)),
+	logout: () => settle(Session.Logout()),
+	setProxy: (p) => settle(Session.SetProxy(p)),
+	getLibrary: () =>
+		settle(Library.GetLibrary(), (lib) => lib as unknown as RemoteLibrary),
+	deleteTrack: (p) => settle(Library.DeleteTrack(p)),
+	editTrack: (p) => settle(Library.EditTrack(p)),
+	createArtist: (p) => settle(Library.CreateArtist(p)),
+	editArtist: (p) => settle(Library.EditArtist(p)),
+	deleteArtist: (p) => settle(Library.DeleteArtist(p)),
+	createPlaylist: (p) => settle(Library.CreatePlaylist(p)),
+	editPlaylist: (p) => settle(Library.EditPlaylist(p)),
+	deletePlaylist: (p) => settle(Library.DeletePlaylist(p)),
+	getBinaryStatus: () =>
+		settle(Binaries.GetBinaryStatus(), (st) => st as BinaryStatus),
+	installMissingBinaries: (p) => settle(Binaries.InstallMissingBinaries(p)),
+	updateYtDlp: () => settle(Binaries.UpdateYtDlp()),
+	checkYtDlpUpdate: () =>
+		Binaries.CheckYtDlpUpdate().then((r) => ({ ok: true as const, ...r })),
+};
+
+export const bun = new Proxy(ported as Requests, {
+	get: (target, name) =>
+		target[name as keyof Requests] ?? notPorted(String(name)),
 });
 
+// Each pushed message is fed by one Go event per variant; wrap restores its `type`.
+const pushed: {
+	[K in keyof Messages]?: { event: string; wrap?: (data: any) => Messages[K] }[];
+} = {
+	sessionExpired: [{ event: EventNames.SessionExpired }],
+	binaryProgress: [
+		{ event: EventNames.BinariesProgress, wrap: (d) => ({ type: "progress", ...d }) },
+		{ event: EventNames.BinariesInstalled, wrap: (d) => ({ type: "binaryInstalled", ...d }) },
+		{ event: EventNames.BinariesFinished, wrap: () => ({ type: "finished" }) },
+		{ event: EventNames.BinariesFailed, wrap: (d) => ({ type: "failed", ...d }) },
+	],
+};
+
 export function onBunMessage<K extends keyof Messages>(
-	_name: K,
-	_listener: (payload: Messages[K]) => void,
-): void {}
+	name: K,
+	listener: (payload: Messages[K]) => void,
+): void {
+	for (const { event, wrap } of pushed[name] ?? []) {
+		Events.On(event, (e) => listener(wrap ? wrap(e.data) : e.data));
+	}
+}
 
 export const notifyBun = {
 	presenceChanged(_message: PresenceMessage): void {},

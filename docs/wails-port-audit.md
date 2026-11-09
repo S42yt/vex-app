@@ -90,7 +90,7 @@ The Go side is new code. It starts from the sandbox packages (Ground rules 7) an
 | `README.md`, `assets/*.png` screenshots | same paths | The stack badges are updated. |
 | `docs/wails-port-audit.md` | same path | The spec (Ground rules 3, 8). |
 
-**Frontend toolchain:** start from the template's `frontend/package.json`, which brings Vite, `@vitejs/plugin-react` and the Wails Vite plugin at the versions v3.1.0 was tested with. Add the app's runtime dependencies at their current `package.json` versions, and keep TypeScript at the repo's version. Checked in the first commit: `wails3 build` and `bunx tsc --noEmit` pass, and the preview skill's library and settings renders are byte-identical to the reference checkout's (discover differs only by its download spinner, which never renders the same twice).
+**Frontend toolchain:** start from the template's `frontend/package.json`, which brings Vite, `@vitejs/plugin-react` and the Wails Vite plugin at the versions v3.1.0 was tested with. Add the app's runtime dependencies at their current `package.json` versions, and keep TypeScript at the repo's version. `noUnusedParameters` stays off, as in the template: the generated `Nullable<T>` binding never uses `T`. Checked in the first commit: `wails3 build` and `bunx tsc --noEmit` pass, and the preview skill's library and settings renders are byte-identical to the reference checkout's (discover differs only by its download spinner, which never renders the same twice).
 
 **Not carried over:**
 - **`src/bun/**`:** reimplemented in Go.
@@ -271,7 +271,7 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 - **Timeouts:** Go's `http.Server` has no idle ceiling like Bun's 255 s. Set `ReadHeaderTimeout` and no `WriteTimeout`, so paused media connections survive.
 
 **Recommended design: one shared download per track** (`port-sandbox/gotests/media/server.go`, 417 lines including the probe's event logging; `StreamProxy.ts` + `TrackCache.ts` are about 560).
-- **The download:** the first request for a track, element or `/head`, starts a `download`. It is a goroutine under a session-scoped context, never a request's, and fetches `GET /tracks/:id/audio` without `Range` into a buffer pre-sized from `Content-Length`, which the backend sends on that `200`. Each append closes and replaces a `changed` channel.
+- **The download:** the first request for a track, element or `/head`, starts a `download`. It is a goroutine under a session-scoped context, never a request's, and fetches `GET /track/:id/audio` (the token raw in `Authorization`, as `contract.ts` has it) without `Range` into a buffer pre-sized from `Content-Length`, which the backend sends on that `200`. Each append closes and replaces a `changed` channel.
 - **Serving requests:** every request reads it through a `progressive` `io.ReadSeeker` whose `Read` blocks until the bytes arrive (or the request context ends). `http.ServeContent(w, r, "", time.Time{}, reader)` then answers single and multi-range, 416 and `Content-Length`. That replaces `respondFromCache`/`parseRange` (`TrackCache.ts:52-96`).
 - **Seeking:** a request starting more than 1 MiB past the downloaded bytes is forwarded as its own upstream Range request on `r.Context()`, so aborting it cancels the upstream. A seek back into downloaded bytes is served locally.
 - **When the download completes:** the buffer moves into the LRU cache.
@@ -411,7 +411,7 @@ Each bound call is a goroutine, so every piece of state Bun's event loop protect
 | Discord presence (`DiscordPresence.ts:60-280`, three nullable timers) | One actor goroutine owns the socket, state and timers. Callers send on channels; `SetEnabled` carries a reply channel ("the switch is a request", root `CLAUDE.md`). A reader goroutine forwards frames tagged with their socket, so stale frames are ignored | Timer callbacks and socket events mutate the same fields; an actor removes `clearTimer` and the reentrancy reasoning | `presence_test.go`: 101 changes from 20 goroutines → 3 sends ≥ 5 s floor apart (scaled), last track wins; concurrent toggles |
 | Stream downloads + cache (§3.1) | `downloads` map under the server mutex; each `download` has its own mutex plus a close-and-replace `changed` channel; the cache is a mutex LRU | Readers must wait on progress *and* their request ctx; a channel can be `select`ed, a `sync.Cond` can't | `media` tests |
 | Upload staging + queue (§3.2) | Mutex-guarded map of staged entries (bound calls and the cover route); one upload worker as for imports | Short critical sections, two goroutine sources | same shape as `importer` |
-| Proxy setting (`ApiClient.proxyUrl`) | `atomic.Pointer` to the current `*http.Client` (rebuilt on change, since transports pool connections per proxy); yt-dlp env and updater read the same value | Read on every request, written on login/settings | covered by `session` pattern |
+| Proxy setting (`ApiClient.proxyUrl`) | The proxy is part of the immutable `Session`. `netx.For(proxy)` hands out that proxy's API and stream clients, rebuilt only when the proxy changes (mutex), since transports pool connections per proxy; yt-dlp env and updater read the session's proxy | Read on every request, written on login/settings | covered by `session` pattern |
 
 Two more findings:
 - **Latent bug in today's code:** `StreamProxy`'s 401 callback calls `api.expireSession()` unconditionally (`index.ts:36-45` → `ApiClient.ts:101-103`). A late 401 from a stream that started under the old token can log out a session created after it. `Expire(seen)` with CAS fixes it.
@@ -474,7 +474,7 @@ The login stays in `localStorage` (`storage.ts:75-79`) and is pushed to Go with 
   - renaming the exe doesn't log users out;
   - a roaming domain profile doesn't carry the WebView2 cache;
   - uninstalling a channel removes its login with `VexWaveData\<channel>\` (§3.11).
-- **Remote debugging:** `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` has no effect on a Wails app. Wails always passes `--disable-features=msSmartScreenProtection` through the API (`wails:v3/pkg/application/webview_window_windows.go:2586-2605`), and the debugging port never appeared on the browser command line. Use `Windows.AdditionalBrowserArgs: []string{"--remote-debugging-port=N"}` behind a dev flag. Port 9222 is held by a system service on this machine, so pick another.
+- **Remote debugging:** `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` has no effect on a Wails app. Wails always passes `--disable-features=msSmartScreenProtection` through the API (`wails:v3/pkg/application/webview_window_windows.go:2586-2605`), and the debugging port never appeared on the browser command line. Use `Windows.AdditionalBrowserArgs: []string{"--remote-debugging-port=N"}` behind a dev flag: the `VEXWAVE_CDP_PORT` environment variable, honoured only by `dev` builds. Port 9222 is held by a system service on this machine, so pick another.
 
 ### 3.9 App updater — **med**
 
@@ -723,7 +723,7 @@ internal/
   buildinfo/                   // Version, Channel (ldflags), the channels' product names and UNINST_KEY_NAMEs
   datadirs/                    // Layout (%LOCALAPPDATA%\VexWaveData\{bin, <channel>\webview, <channel>\imports}), RemoveData rule, LockBin (bin\.lock)
   platform/                    // Command(): CREATE_NO_WINDOW + HideWindow, PATH appended last
-  netx/                        // Clients: atomic.Pointer[*http.Client]; httpproxy ProxyFunc; OnProxyConnectResponse → ProxyAuthError; error classification
+  netx/                        // For(proxy): cached API + stream clients; httpproxy ProxyFunc; OnProxyConnectResponse → ProxyAuthError; Unreachable text
   busy/                        // Registry: Acquire(Kind) (release, error), QuitBlocker()
   backend/                     // Client (13 methods), Failure error, Nullable[T], path builders, limits_gen.go
   session/                     // SessionService (bound): Restore, Login, Logout, SetProxy; Store = atomic.Pointer[Session] + CAS
@@ -763,7 +763,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `datadirs` | `port-sandbox/gotests/datadirs` | `datadirs_test.go`, `binlock_test.go` |
 | `busy` | `port-sandbox/gotests/busy` | `busy_test.go` |
 | `session` | `port-sandbox/gotests/session` | `session_test.go` |
-| `media` | `port-sandbox/gotests/media` (drop the probe's `Event` logging) | `server_test.go`, `fakebackend.go` |
+| `media` | `port-sandbox/gotests/media` (`Event` stays only as the unexported `onEvent` hook the tests read) | `server_test.go`, `fakebackend.go` |
 | `netx`, `backend` (errors, `Retry-After`) | `port-sandbox/gotests/netx` | `netx_test.go` |
 | `upload` | `port-sandbox/gotests/upload` | `upload_test.go`; `probe_test.go` asserting the ffprobe results directly (the `music-metadata` comparison through `fixtures/mm.ts` stays in the reference); `gen.sh` moves to `internal/upload/testdata/` |
 | `importer` | `port-sandbox/gotests/importer` | `importer_test.go` |
