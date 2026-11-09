@@ -5,7 +5,7 @@
 These bind every porting session.
 
 1. **Target: Windows / WebView2 only.** No macOS or Linux code, build tags or build assets.
-2. **Wails is pinned to exactly v3.1.0** (`github.com/wailsapp/wails/v3 v3.1.0`, `@wailsio/runtime 3.1.0` and the matching `wails3` CLI), with **Go 1.26**. Before any Wails bump, run the `port-sandbox/` suite against the new version in the reference checkout (`go test -race ./...` in `port-sandbox/gotests`, plus the `port-sandbox/cdp` probes; see Port setup), and fix this report wherever the results differ.
+2. **Wails is pinned to exactly v3.1.0** (`github.com/wailsapp/wails/v3 v3.1.0`, `@wailsio/runtime 3.1.0` and the matching `wails3` CLI), built with **Go 1.27** (`go.mod`: `go 1.26.0`, the minimum Wails v3.1.0 requires, plus `toolchain go1.27.0`; CI reads it with `go-version-file: go.mod`). Before any Wails bump, run the `port-sandbox/` suite against the new version in the reference checkout (`go test -race ./...` in `port-sandbox/gotests`, plus the `port-sandbox/cdp` probes; see Port setup), and fix this report wherever the results differ.
 3. **This report is the spec. The Electrobun app is the behavioural reference.** Keep it buildable and runnable on `main` until the port matches it feature for feature. Where this report says nothing, do what the Electrobun app does.
 4. **Idiomatic Go.** `gofmt`, `go vet` and `go test -race` must pass. Shared state follows the models in §3.4: a new piece of shared state gets a model from that table, never an ad-hoc lock.
 5. **`frontend/src/api/rpc.ts` is the only frontend file that imports Wails** (`@wailsio/runtime` or generated bindings).
@@ -30,6 +30,18 @@ The port starts on a new branch from a **fresh `wails3 init -t react` project** 
 - **Branch from `main`**, after `6ba637c`, the commit that adds `docs/` and `port-sandbox/` (below: the *reference commit*). Shared history lets the finished port land on `main` as an ordinary merge, and the Electrobun history stays in `git log`. An orphan branch would need `--allow-unrelated-histories` to merge.
 - **First commit:** delete the Electrobun tree, except what the table below carries over. Generate the template into the repo root. Add the root `.gitattributes` and `CLAUDE.md` (below), then run `git add --renormalize .` so every committed text file is LF.
 - **Trim the template the way `port-sandbox/app` was trimmed:** delete the non-Windows build assets, give `generate:icons` `-macfilename ""`, and delete the demo service, the demo images and the template's styles.
+
+### Names
+
+| Item | Value | Where it's set |
+|---|---|---|
+| Go module | `github.com/VexWave/vex-app` | `go.mod` |
+| Company | `realChriss` | `build/config.yml` `info.companyName`, copyright |
+| Product (stable) | `VexWave`, installed to `Programs\VexWave` | `build/config.yml` `info.productName`, `buildinfo` |
+| Product (canary, not packaged yet, §5) | `VexWave Canary`, `Programs\VexWave Canary` | `buildinfo` |
+| Product identifier | `app.vexwave` (an app ID only, not the old uninstaller's registry key) | `build/config.yml` `info.productIdentifier` |
+| `UNINST_KEY_NAME` (stable / canary) | `VexWave` / `VexWave Canary`. Set explicitly; the default would be `<Company><Product>` | `project.nsi`, `buildinfo` |
+| Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (the Taskfile's `<APP_NAME>-installer.exe`) for first installs. None is `VexWave-Setup.exe` (§5) | `build-windows.yml` |
 
 ### Layout: the Wails template's, unchanged
 
@@ -97,7 +109,7 @@ The first commit creates one root `CLAUDE.md` with exactly this content, and no 
 ```markdown
 # CLAUDE.md
 
-VexWave: a Windows desktop music player on Wails v3.1.0 (Go 1.26, WebView2), with the React UI in `frontend/`.
+VexWave: a Windows desktop music player on Wails v3.1.0 (Go 1.27, WebView2), with the React UI in `frontend/`.
 
 - **Spec:** `docs/wails-port-audit.md`. Its Ground rules bind every change. Where it says nothing, do what the Electrobun app does.
 - **Behavioural reference:** the Electrobun app, checked out at `../vex-app-electrobun` (the report's Port setup says how to create it). The report's `file:line` references resolve there.
@@ -142,7 +154,7 @@ Line references into this repo are against `main` at `77faba4` (v0.6.1). On the 
 
 **How this was verified.**
 - **Wails version:** **v3.1.0** (`wails3 version`). v3.0.0 was the first stable release (`wails:docs/mpress/content/status.md:8`). Every Wails claim was checked against the v3.1.0 tag (commit `4b454e4`, 2026‑11‑01). `wails:<path>:<line>` points into that tree.
-- **Go version:** Wails v3.1.0 requires Go 1.26 (`go 1.26.0`, `toolchain go1.26.10` in its `go.mod`).
+- **Go version:** Wails v3.1.0 requires Go 1.26 (`go 1.26.0`, `toolchain go1.26.10` in its `go.mod`). The sandbox ran on Go 1.27.0: a `toolchain` line never downgrades, so `GOTOOLCHAIN=auto` kept the local 1.27.
 - **Sandbox:** behaviour was proven in `port-sandbox/` in this repo (how to run it: `port-sandbox/README.md`). It stays on `main`; the port branch reaches it through the reference checkout (Port setup):
   - `port-sandbox/gotests/`: Go tests, all passing under `go test -race`.
   - `port-sandbox/app/`: a Wails app from `wails3 init -t react` (in v3.1.0 the TypeScript template is called `react`). Its non-Windows build assets are removed, and `wails3 build` still works.
@@ -178,7 +190,7 @@ Line references into this repo are against `main` at `77faba4` (v0.6.1). On the 
 
 | Decision | How the port implements it | Section |
 |---|---|---|
-| Windows / WebView2 only; Wails v3.1.0 pinned, Go 1.26 | Ground rules 1–2 | Ground rules |
+| Windows / WebView2 only; Wails v3.1.0 pinned, Go 1.27 | Ground rules 1–2 | Ground rules |
 | Audio through a loopback Go `http.Server` | One shared download per track plus an LRU cache; seeks past the download are forwarded as Range requests. The backend sends `Content-Length` on the audio `200` | §3.1 |
 | Uploads by file path, still base64 inside JSON | Native dialog and finished imports give paths; Go probes with ffprobe and streams the base64 JSON body | §3.2 |
 | Concurrency by choice of model, not blanket locks | `atomic.Pointer` with CAS, a mutex registry, worker goroutines, `context` cancellation, an actor, and a cross-process file lock for the shared `bin\` | §3.4 |
@@ -503,7 +515,7 @@ What it replaces:
 
 Wails equivalents (src):
 - **Installer:** `wails3 package` builds NSIS. `!define WAILS_INSTALL_SCOPE "user"` installs to `$LOCALAPPDATA\Programs\<Product>` (`wails:v3/internal/commands/build_assets/windows/nsis/project.nsi.tmpl:32,76-77`). It writes `UninstallString` and `QuietUninstallString` (`…\uninstall.exe" /S`) under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\<UNINST_KEY_NAME>`, which defaults to `<Company><Product>` (`wails:v3/internal/commands/updatable_build_assets/windows/nsis/wails_tools.nsh.tmpl:25-28,127-136`). Building and running it is still to check (§7).
-- **Stable only for now:** `wails3 package` builds the stable installer, installing to `Programs\VexWave`. Set `UNINST_KEY_NAME` explicitly in `project.nsi` (`wails_tools.nsh` only defines it when it's unset): §3.11 checks this exact name, and `buildinfo` holds it. The name must not be the Electrobun key `<identifier>` (`app.vexwave`, `electrobun.config.ts:6`), because the old uninstaller deletes that key (`Uninstaller.ts:75`). A separate canary product is deferred (§5).
+- **Stable only for now:** `wails3 package` builds the stable installer, installing to `Programs\VexWave`. Set `UNINST_KEY_NAME` explicitly in `project.nsi` (`VexWave`, Port setup → Names) (`wails_tools.nsh` only defines it when it's unset): §3.11 checks this exact name, and `buildinfo` holds it. The name must not be the Electrobun key `<identifier>` (`app.vexwave`, `electrobun.config.ts:6`), because the old uninstaller deletes that key (`Uninstaller.ts:75`). A separate canary product is deferred (§5).
 - **Install folder:** holds only the app, `uninstall.exe` and the updater's transient `wails-update-*` staging (§3.9). User data goes to `VexWaveData` (Ground rules 6).
 - **Dark caption:** `WindowsWindow{Theme: application.Dark, CustomTheme: ThemeSettings{…}}` (`wails:v3/pkg/application/webview_window_options.go:366-372,439-450`). The colours in `WindowChrome.ts:22-24` carry over.
 - **DPI:** the manifest declares `permonitorv2,permonitor` (`wails:v3/internal/commands/updatable_build_assets/windows/wails.exe.manifest.tmpl:11-12`). Measured: at 125 % scaling the page reports `devicePixelRatio` 1.25, and WebView2 starts with `--embedded-browser-webview-dpi-awareness=2`. No nudge is needed. `lib/devicePixelRatio.ts` keeps its media query; its `resize` trigger (`:1-5,22`) was for CEF.
