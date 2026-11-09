@@ -8,7 +8,7 @@ info:
   companyName: "realChriss" # The name of the company
   productName: "VexWave" # The name of the application
   productIdentifier: "app.vexwave" # The unique product identifier
-  description: "A desktop music player" # The application description
+  description: "VexWave" # Task Manager names the process by this (FileDescription), not productName
   copyright: "© 2026, realChriss" # Copyright text
   comments: "" # Comments
   version: "1.0.0" # The application version
