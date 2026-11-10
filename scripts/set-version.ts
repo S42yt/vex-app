@@ -2,7 +2,8 @@ const CONFIG = "build/config.yml";
 const INFO = "build/windows/info.json";
 const MANIFEST = "build/windows/wails.exe.manifest";
 const NSIS_TOOLS = "build/windows/nsis/wails_tools.nsh";
-export const VERSION_FILES = [CONFIG, INFO, MANIFEST, NSIS_TOOLS];
+const NFPM = "build/linux/nfpm/nfpm.yaml";
+export const VERSION_FILES = [CONFIG, INFO, MANIFEST, NSIS_TOOLS, NFPM];
 // info.version: the first double-quoted `version:`. The file's own `version: '3'` is single-quoted.
 const VERSION_LINE = /^(\s*version:\s*)"[^"]*"/m;
 
@@ -20,6 +21,7 @@ export async function setVersion(version: string): Promise<void> {
 
 	await replaceOnce(MANIFEST, /(<assemblyIdentity [^>]*\bversion=")[^"]*"/, `$1${version}"`);
 	await replaceOnce(NSIS_TOOLS, /(!define INFO_PRODUCTVERSION ")[^"]*"/, `$1${version}"`);
+	await replaceOnce(NFPM, /^(version: )"[^"]*"/m, `$1"${version}"`);
 }
 
 async function replaceOnce(path: string, pattern: RegExp, replacement: string): Promise<void> {

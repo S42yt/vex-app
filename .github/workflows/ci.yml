@@ -57,3 +57,37 @@ jobs:
           wails3 generate bindings -f '-tags production' -clean=true -ts -i
           git add -A --intent-to-add
           git diff --exit-code -- internal frontend/src/lib/limits.gen.ts frontend/bindings
+
+  check-linux:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install GTK and WebKitGTK
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun install --frozen-lockfile
+        working-directory: contract
+
+      - name: Build frontend
+        run: bun run build
+        working-directory: frontend
+
+      - name: Go
+        run: |
+          go vet ./...
+          go test -race ./...
+          go build -tags production,stable ./...

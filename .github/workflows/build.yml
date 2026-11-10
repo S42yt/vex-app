@@ -1,0 +1,129 @@
+name: Build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) { choco install nsis -y --no-progress }
+          "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bun scripts/set-version.ts ${{ github.ref_name }}
+
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+
+      - run: wails3 task package EXTRA_TAGS=stable
+
+      - name: Name the release assets
+        shell: bash
+        run: |
+          mkdir release
+          cp bin/VexWave.exe release/VexWave-windows-amd64.exe
+          cp bin/VexWave-amd64-installer.exe release/VexWave-installer.exe
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: VexWave-win-x64
+          path: release/
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Install GTK and WebKitGTK
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: bun scripts/set-version.ts ${{ github.ref_name }}
+
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+
+      - run: wails3 task package EXTRA_TAGS=stable
+
+      - name: Name the release assets
+        run: |
+          mkdir release
+          cp bin/VexWave release/VexWave-linux-amd64
+          cp bin/VexWave.deb release/VexWave-linux-amd64.deb
+          cp bin/VexWave.rpm release/VexWave-linux-amd64.rpm
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: VexWave-linux-x64
+          path: release/
+          if-no-files-found: error
+
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Checksum the release assets
+        working-directory: release
+        run: |
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          files: release/*

@@ -1,7 +1,9 @@
 package binaries
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/VexWave/vex-app/internal/events"
 	"github.com/VexWave/vex-app/internal/netx"
 	"github.com/VexWave/vex-app/internal/platform"
+	"github.com/ulikunitz/xz"
 )
 
 type Name string
@@ -34,33 +36,18 @@ var all = []Name{YtDlp, FFmpeg, Deno}
 
 type file struct{ entry, dest string }
 
-type part struct {
-	url   string
-	zip   bool
-	files []file
-}
+type archive int
 
-func parts(n Name) []part {
-	arm := runtime.GOARCH == "arm64"
-	switch n {
-	case YtDlp:
-		exe := "yt-dlp.exe"
-		if arm {
-			exe = "yt-dlp_arm64.exe"
-		}
-		return []part{{"https://github.com/yt-dlp/yt-dlp/releases/latest/download/" + exe, false, []file{{"", "yt-dlp.exe"}}}}
-	case FFmpeg:
-		variant := "win64"
-		if arm {
-			variant = "winarm64"
-		}
-		folder := "ffmpeg-master-latest-" + variant + "-gpl"
-		return []part{{"https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/" + folder + ".zip", true,
-			[]file{{folder + "/bin/ffmpeg.exe", "ffmpeg.exe"}, {folder + "/bin/ffprobe.exe", "ffprobe.exe"}}}}
-	default:
-		// No arm64 Windows build is published; x64 runs under emulation.
-		return []part{{"https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip", true, []file{{"deno.exe", "deno.exe"}}}}
-	}
+const (
+	raw archive = iota
+	zipped
+	tarXz
+)
+
+type part struct {
+	url     string
+	archive archive
+	files   []file
 }
 
 type installed struct {
@@ -200,14 +187,14 @@ func (b *BinaryService) installOne(n Name, tmp, proxy string) error {
 		if err := download(p.url, dl, proxy, func(r, t int64) { progress(r, t, "downloading") }); err != nil {
 			return err
 		}
-		if !p.zip {
+		if p.archive == raw {
 			if err := os.Rename(dl, filepath.Join(b.Bin, p.files[0].dest)); err != nil {
 				return err
 			}
 			continue
 		}
 		progress(0, 0, "extracting")
-		if err := extract(dl, p.files, b.Bin); err != nil {
+		if err := extract(dl, p.archive, p.files, b.Bin); err != nil {
 			return err
 		}
 	}
@@ -226,7 +213,7 @@ func (b *BinaryService) installOne(n Name, tmp, proxy string) error {
 func (b *BinaryService) ytDlpVersion() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	out, err := platform.Command(ctx, b.Bin, filepath.Join(b.Bin, "yt-dlp.exe"), "--version").Output()
+	out, err := platform.Command(ctx, b.Bin, filepath.Join(b.Bin, platform.Exe("yt-dlp")), "--version").Output()
 	if err != nil {
 		return ""
 	}
@@ -245,7 +232,7 @@ func download(url, target, proxy string, progress func(received, total int64)) e
 		return fmt.Errorf("Download failed (HTTP %d): %s", res.StatusCode, url)
 	}
 	total := max(res.ContentLength, 0)
-	f, err := os.Create(target)
+	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
 	if err != nil {
 		return err
 	}
@@ -277,7 +264,14 @@ func download(url, target, proxy string, progress func(received, total int64)) e
 	return f.Close()
 }
 
-func extract(zipPath string, files []file, bin string) error {
+func extract(path string, a archive, files []file, bin string) error {
+	if a == tarXz {
+		return extractTarXz(path, files, bin)
+	}
+	return extractZip(path, files, bin)
+}
+
+func extractZip(zipPath string, files []file, bin string) error {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return err
@@ -288,25 +282,71 @@ func extract(zipPath string, files []file, bin string) error {
 		if err != nil {
 			return fmt.Errorf("%s missing from %s", want.entry, filepath.Base(zipPath))
 		}
-		dest := filepath.Join(bin, want.dest)
-		tmp := dest + ".new"
-		out, err := os.Create(tmp)
-		if err == nil {
-			_, err = io.Copy(out, zf)
-			if cerr := out.Close(); err == nil {
-				err = cerr
-			}
-		}
+		err = writeExe(zf, filepath.Join(bin, want.dest))
 		zf.Close()
-		if err == nil {
-			err = os.Rename(tmp, dest)
-		}
 		if err != nil {
-			os.Remove(tmp)
 			return err
 		}
 	}
 	return nil
+}
+
+func extractTarXz(path string, files []file, bin string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	xr, err := xz.NewReader(bufio.NewReader(f))
+	if err != nil {
+		return err
+	}
+	dests := map[string]string{}
+	for _, want := range files {
+		dests[want.entry] = want.dest
+	}
+	tr := tar.NewReader(xr)
+	for len(dests) > 0 {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		dest, ok := dests[h.Name]
+		if !ok || h.Typeflag != tar.TypeReg {
+			continue
+		}
+		if err := writeExe(tr, filepath.Join(bin, dest)); err != nil {
+			return err
+		}
+		delete(dests, h.Name)
+	}
+	for _, want := range files {
+		if _, ok := dests[want.entry]; ok {
+			return fmt.Errorf("%s missing from %s", want.entry, filepath.Base(path))
+		}
+	}
+	return nil
+}
+
+func writeExe(r io.Reader, dest string) error {
+	tmp := dest + ".new"
+	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err == nil {
+		_, err = io.Copy(out, r)
+		if cerr := out.Close(); err == nil {
+			err = cerr
+		}
+	}
+	if err == nil {
+		err = os.Rename(tmp, dest)
+	}
+	if err != nil {
+		os.Remove(tmp)
+	}
+	return err
 }
 
 func (b *BinaryService) manifestPath() string { return filepath.Join(b.Bin, "manifest.json") }

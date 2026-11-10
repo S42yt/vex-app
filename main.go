@@ -26,6 +26,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var icon []byte
+
 const trackCacheBytes = 256 << 20
 
 func main() {
@@ -89,6 +92,7 @@ func main() {
 	app := application.New(application.Options{
 		Name:        "VexWave",
 		Description: "A desktop music player",
+		Icon:        icon,
 		Services: []application.Service{
 			application.NewService(&session.SessionService{Store: store}),
 			application.NewService(&library.LibraryService{Store: store, URLs: mediaServer}),
@@ -108,6 +112,9 @@ func main() {
 			WebviewUserDataPath:   layout.Webview(buildinfo.Channel),
 			AdditionalBrowserArgs: browserArgs,
 		},
+		Linux: application.LinuxOptions{
+			ApplicationID: "app.vexwave." + buildinfo.Channel,
+		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "app.vexwave." + buildinfo.Channel,
 			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
@@ -123,12 +130,7 @@ func main() {
 	imports.Events = app.Event
 	presenceService.Events = app.Event
 	uninstaller.Quit = app.Quit
-	if buildinfo.Channel != "canary" {
-		if err := update.Configure(app.Updater, buildinfo.Version, proxy); err != nil {
-			log.Fatal(err)
-		}
-		updates.Updater = app.Updater
-	}
+	configureUpdates(app, updates, proxy)
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "VexWave",

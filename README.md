@@ -52,17 +52,25 @@
 
 ### From a release
 
-Download `VexWave-installer.exe` from the **[latest release](https://github.com/VexWave/vex-app/releases/latest)**
-and run it.
+Download from the **[latest release](https://github.com/VexWave/vex-app/releases/latest)**:
+
+| OS | Download |
+| --- | --- |
+| Windows | `VexWave-installer.exe`, then run it |
+| Debian, Ubuntu | `VexWave-linux-amd64.deb`, then `sudo apt install ./VexWave-linux-amd64.deb` |
+| Fedora | `VexWave-linux-amd64.rpm`, then `sudo dnf install ./VexWave-linux-amd64.rpm` |
+
+On Linux, VexWave needs GTK 4 and WebKitGTK 6.0 (Ubuntu 24.04+, Debian 13+, Fedora 39+), and GStreamer's good and
+libav plugins to play every format. It doesn't update itself: install each new release the same way.
 
 > [!NOTE]
 > First launch downloads yt-dlp, ffmpeg and deno before showing the login screen.
 
 ### From source
 
-Windows only. Needs **[Go](https://go.dev) 1.27**, **[Bun](https://bun.sh) 1.4+** and the
-**[Wails](https://v3.wails.io) v3.1.0** CLI. The installer also needs **[NSIS](https://nsis.sourceforge.io)**
-(`makensis` on `PATH`).
+Needs **[Go](https://go.dev) 1.27**, **[Bun](https://bun.sh) 1.4+** and the **[Wails](https://v3.wails.io) v3.1.0** CLI.
+The Windows installer also needs **[NSIS](https://nsis.sourceforge.io)** (`makensis` on `PATH`). On Linux, install a C
+compiler and the GTK 4 and WebKitGTK 6.0 headers first (`sudo apt install build-essential libgtk-4-dev libwebkitgtk-6.0-dev`).
 
 ```sh
 git clone https://github.com/VexWave/vex-app.git
@@ -73,5 +81,5 @@ go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 | Command | What it does |
 | --- | --- |
 | `wails3 task dev` | Develop, with Vite HMR |
-| `wails3 task build` | Build `bin/VexWave.exe` |
-| `wails3 task package EXTRA_TAGS=stable` | Build the stable `bin/VexWave-amd64-installer.exe` |
+| `wails3 task build` | Build `bin/VexWave.exe` (`bin/VexWave` on Linux) |
+| `wails3 task package EXTRA_TAGS=stable` | Build the stable `bin/VexWave-amd64-installer.exe` (`bin/VexWave.deb` and `bin/VexWave.rpm` on Linux) |

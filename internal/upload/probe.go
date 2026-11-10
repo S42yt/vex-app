@@ -46,7 +46,7 @@ func tag(tags map[string]string, key string) string {
 }
 
 func probe(ctx context.Context, bin, path string) (probed, error) {
-	out, err := platform.Command(ctx, bin, filepath.Join(bin, "ffprobe.exe"),
+	out, err := platform.Command(ctx, bin, filepath.Join(bin, platform.Exe("ffprobe")),
 		"-v", "error", "-print_format", "json", "-show_format", "-show_streams", path).Output()
 	if err != nil {
 		return probed{}, err
@@ -77,7 +77,7 @@ func probe(ctx context.Context, bin, path string) (probed, error) {
 	for _, s := range p.Streams {
 		if s.Disposition.AttachedPic == 1 {
 			var buf bytes.Buffer
-			cmd := platform.Command(ctx, bin, filepath.Join(bin, "ffmpeg.exe"),
+			cmd := platform.Command(ctx, bin, filepath.Join(bin, platform.Exe("ffmpeg")),
 				"-v", "error", "-i", path, "-map", "0:"+strconv.Itoa(s.Index), "-c", "copy", "-f", "image2pipe", "-")
 			cmd.Stdout = &buf
 			if cmd.Run() == nil {

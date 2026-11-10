@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=VexWave
+Comment=A desktop music player
+Exec=vexwave
+Icon=app.vexwave.stable
+Terminal=false
+Categories=AudioVideo;Audio;Player;

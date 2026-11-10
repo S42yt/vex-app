@@ -2,7 +2,6 @@ package presence
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Microsoft/go-winio"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -33,13 +31,13 @@ type sent struct {
 }
 
 func newFakeDiscord(t *testing.T, refuse bool) *fakeDiscord {
-	d := &fakeDiscord{prefix: `\\.\pipe\vexwave-test-` + rand.Text() + `-`, refuse: refuse}
+	d := &fakeDiscord{prefix: testPrefix(t, "test"), refuse: refuse}
 	d.listen(t)
 	return d
 }
 
 func (d *fakeDiscord) listen(t *testing.T) {
-	ln, err := winio.ListenPipe(d.prefix+"3", nil)
+	ln, err := listenPipe(d.prefix + "3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +123,7 @@ var fast = timing{debounce: 20 * time.Millisecond, floor: 100 * time.Millisecond
 
 func start(t *testing.T, d *fakeDiscord, baseURL string) (*PresenceService, statuses) {
 	st := make(statuses, 64)
-	p := &PresenceService{Events: st, BaseURL: func() string { return baseURL }, pipePrefix: d.prefix, timing: fast}
+	p := &PresenceService{Events: st, BaseURL: func() string { return baseURL }, pipePrefixes: []string{d.prefix}, timing: fast}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	p.ServiceStartup(ctx, application.ServiceOptions{})
@@ -221,7 +219,7 @@ func TestReconnectsAfterDiscordQuits(t *testing.T) {
 }
 
 func TestNoDiscord(t *testing.T) {
-	p := &PresenceService{Events: make(statuses, 8), pipePrefix: `\\.\pipe\vexwave-nobody-` + rand.Text() + `-`, timing: fast}
+	p := &PresenceService{Events: make(statuses, 8), pipePrefixes: []string{testPrefix(t, "nobody")}, timing: fast}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	p.ServiceStartup(ctx, application.ServiceOptions{})

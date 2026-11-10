@@ -21,7 +21,7 @@ import (
 var baseArgs = []string{"--encoding", "UTF-8"}
 
 func Command(ctx context.Context, bin, proxy string, args ...string) *exec.Cmd {
-	cmd := platform.Command(ctx, bin, filepath.Join(bin, "yt-dlp.exe"), append(append([]string{}, baseArgs...), args...)...)
+	cmd := platform.Command(ctx, bin, filepath.Join(bin, platform.Exe("yt-dlp")), append(append([]string{}, baseArgs...), args...)...)
 	if proxy != "" {
 		env := cmd.Env[:0:0]
 		for _, kv := range cmd.Env {

@@ -15,7 +15,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Microsoft/go-winio"
 	"github.com/VexWave/vex-app/internal/backend"
 	"github.com/VexWave/vex-app/internal/events"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -72,10 +71,10 @@ type PresenceService struct {
 	Events  events.Emitter
 	BaseURL func() string
 
-	pipePrefix string
-	timing     timing
-	enable     chan enableReq
-	playing    chan *Track
+	pipePrefixes []string
+	timing       timing
+	enable       chan enableReq
+	playing      chan *Track
 }
 
 type enableReq struct {
@@ -84,8 +83,8 @@ type enableReq struct {
 }
 
 func (p *PresenceService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
-	if p.pipePrefix == "" {
-		p.pipePrefix = `\\.\pipe\discord-ipc-`
+	if p.pipePrefixes == nil {
+		p.pipePrefixes = pipePrefixes()
 	}
 	if p.timing == (timing{}) {
 		p.timing = production
@@ -289,12 +288,14 @@ func (p *PresenceService) loop(ctx context.Context) {
 }
 
 func (p *PresenceService) dial(ctx context.Context) io.ReadWriteCloser {
-	for i := 0; i <= maxPipeIndex; i++ {
-		ctx, cancel := context.WithTimeout(ctx, busyPipeWait)
-		c, err := winio.DialPipeContext(ctx, fmt.Sprint(p.pipePrefix, i))
-		cancel()
-		if err == nil {
-			return c
+	for _, prefix := range p.pipePrefixes {
+		for i := 0; i <= maxPipeIndex; i++ {
+			ctx, cancel := context.WithTimeout(ctx, busyPipeWait)
+			c, err := dialPipe(ctx, fmt.Sprint(prefix, i))
+			cancel()
+			if err == nil {
+				return c
+			}
 		}
 	}
 	return nil

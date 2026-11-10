@@ -13,8 +13,8 @@ import (
 
 func managedBin(t *testing.T) string {
 	bin := datadirs.Default().Bin()
-	if _, err := os.Stat(filepath.Join(bin, "ffprobe.exe")); err != nil {
-		t.Skip("no managed ffprobe.exe")
+	if _, err := os.Stat(filepath.Join(bin, platform.Exe("ffprobe"))); err != nil {
+		t.Skip("no managed ffprobe")
 	}
 	if _, err := os.Stat(filepath.Join("testdata", "tagged.mp3")); err != nil {
 		out, err := platform.Command(context.Background(), bin, "sh", filepath.Join("testdata", "gen.sh")).CombinedOutput()

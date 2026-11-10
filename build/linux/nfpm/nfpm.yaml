@@ -1,0 +1,44 @@
+name: "vexwave"
+arch: ${GOARCH}
+platform: "linux"
+version: "1.0.0"
+section: "sound"
+priority: "optional"
+maintainer: "realChriss <77172965+realChriss@users.noreply.github.com>"
+description: "A desktop music player connected to your server."
+vendor: "realChriss"
+homepage: "https://github.com/VexWave/vex-app"
+release: "1"
+
+contents:
+  - src: "./bin/VexWave"
+    dst: "/usr/bin/vexwave"
+    file_info:
+      mode: 0755
+  - src: "./build/appicon.png"
+    dst: "/usr/share/pixmaps/app.vexwave.stable.png"
+    file_info:
+      mode: 0644
+  - src: "./build/linux/app.vexwave.stable.desktop"
+    dst: "/usr/share/applications/app.vexwave.stable.desktop"
+    file_info:
+      mode: 0644
+
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4
+recommends:
+  - gstreamer1.0-plugins-good
+  - gstreamer1.0-libav
+
+overrides:
+  rpm:
+    depends:
+      - gtk4
+      - webkitgtk6.0
+    recommends:
+      - gstreamer1-plugins-good
+      - gstreamer1-plugin-libav
+
+scripts:
+  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"

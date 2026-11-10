@@ -4,7 +4,7 @@
 
 These bind every porting session.
 
-1. **Target: Windows / WebView2 only.** No macOS or Linux code, build tags or build assets.
+1. **Targets: Windows / WebView2 and Linux / WebKitGTK 6.0.** No macOS code, build tags or build assets. OS-specific code lives in `_windows.go` and `_linux.go` files, and every service exposes the same methods on both, so the generated bindings are the same on either OS.
 2. **Wails is pinned to exactly v3.1.0** (`github.com/wailsapp/wails/v3 v3.1.0`, `@wailsio/runtime 3.1.0` and the matching `wails3` CLI), built with **Go 1.27** (`go.mod`: `go 1.26.0`, the minimum Wails v3.1.0 requires, plus `toolchain go1.27.0`; CI reads it with `go-version-file: go.mod`). Before any Wails bump, run the `port-sandbox/` suite against the new version in the reference checkout (`go test -race ./...` in `port-sandbox/gotests`, plus the `port-sandbox/cdp` probes; see Port setup), and fix this report wherever the results differ.
 3. **This report is the spec. The Electrobun app is the behavioural reference.** Keep it buildable and runnable on `main` until the port matches it feature for feature. Where this report says nothing, do what the Electrobun app does.
 4. **Idiomatic Go.** `gofmt`, `go vet` and `go test -race` must pass. Shared state follows the models in §3.4: a new piece of shared state gets a model from that table, never an ad-hoc lock.
@@ -41,7 +41,7 @@ The port starts on a new branch from a **fresh `wails3 init -t react` project** 
 | Product (canary, not packaged yet, §5) | `VexWave Canary`, `Programs\VexWave Canary` | its installer config, once canary is packaged |
 | Product identifier | `app.vexwave` (an app ID only, not the old uninstaller's registry key) | `build/config.yml` `info.productIdentifier` |
 | `UNINST_KEY_NAME` (stable / canary) | `VexWave` / `VexWave Canary`. Set explicitly; the default would be `<Company><Product>` | `project.nsi`, `buildinfo` |
-| Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (`project.nsi` writes `bin/VexWave-amd64-installer.exe`; CI renames it) for first installs. `SHA256SUMS` is `sha256sum` output for both exes; the provider strips its `*` (`wails:v3/pkg/updater/providers/github/github.go:352-375`). None is `VexWave-Setup.exe` (§5) | `build-windows.yml` |
+| Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (`project.nsi` writes `bin/VexWave-amd64-installer.exe`; CI renames it) for first installs. `SHA256SUMS` is `sha256sum` output for both exes; the provider strips its `*` (`wails:v3/pkg/updater/providers/github/github.go:352-375`). None is `VexWave-Setup.exe` (§5). Linux adds `VexWave-linux-amd64` and its `.deb` and `.rpm`, listed in the same `SHA256SUMS` | `build.yml` |
 
 ### Layout: the Wails template's, unchanged
 
@@ -84,7 +84,7 @@ The Go side is new code. It starts from the sandbox packages (Ground rules 7) an
 | `scripts/test-server.ts` | `contract/test-server.ts` | Unchanged apart from its import path. It is the throwaway backend for manual end-to-end checks (§7). |
 | `port-sandbox/gotests/<pkg>` | `internal/<pkg>` | Code and tests, per the §6 map. The comparisons that need the old app's sources stay in the reference (§6). |
 | `scripts/release.ts` | `scripts/release.ts` | Same procedure, but writes the version into `build/config.yml` (§3.10). |
-| `.github/workflows/*` | same paths | Rewritten. The Go code imports `golang.org/x/sys/windows`, so CI runs on `windows-latest`: tsc, `go vet`, `go test -race`, and drift checks for the bindings and limits. In `build-windows.yml`, a `v*` tag builds stable and publishes it, as today. The manual canary run is left out until canary packaging is designed (§5). The workflow keeps its SHA-pinned actions and `persist-credentials: false`, and runs `wails3 package` instead of the fuse step. |
+| `.github/workflows/*` | same paths | Rewritten. CI runs on `windows-latest` (tsc, `go vet`, `go test -race`, and drift checks for the bindings and limits) and on `ubuntu-24.04` (`go vet`, `go test -race`). In `build.yml`, a `v*` tag builds stable for both and publishes it, as today. The manual canary run is left out until canary packaging is designed (§5). The workflow keeps its SHA-pinned actions and `persist-credentials: false`, and runs `wails3 package` instead of the fuse step. |
 | `.claude/skills/preview/` | same path | Paths moved to `frontend/`. The `window.__electrobun` stub is removed (§4). |
 | `assets/vex-logo.png` | `build/appicon.png` | The source for `wails3 generate icons`. |
 | `README.md`, `assets/*.png` screenshots | same paths | The stack badges are updated. |
@@ -190,7 +190,7 @@ Line references into this repo are against `main` at `77faba4` (v0.6.1). On the 
 
 | Decision | How the port implements it | Section |
 |---|---|---|
-| Windows / WebView2 only; Wails v3.1.0 pinned, Go 1.27 | Ground rules 1–2 | Ground rules |
+| Windows / WebView2 and Linux / WebKitGTK; Wails v3.1.0 pinned, Go 1.27 | Ground rules 1–2 | Ground rules |
 | Audio through a loopback Go `http.Server` | One shared download per track plus an LRU cache; seeks past the download are forwarded as Range requests. The backend sends `Content-Length` on the audio `200` | §3.1 |
 | Uploads by file path, still base64 inside JSON | Native dialog and finished imports give paths; Go probes with ffprobe and streams the base64 JSON body | §3.2 |
 | Concurrency by choice of model, not blanket locks | `atomic.Pointer` with CAS, a mutex registry, worker goroutines, `context` cancellation, an actor, and a cross-process file lock for the shared `bin\` | §3.4 |
@@ -535,10 +535,15 @@ Wails equivalents (src):
 - **DPI:** the manifest declares `permonitorv2,permonitor` (`wails:v3/internal/commands/updatable_build_assets/windows/wails.exe.manifest.tmpl:11-12`). Measured: at 125 % scaling the page reports `devicePixelRatio` 1.25, and WebView2 starts with `--embedded-browser-webview-dpi-awareness=2`. No nudge is needed. `lib/devicePixelRatio.ts` keeps its media query; its `resize` trigger was for CEF and is gone.
 - **Build:** `wails3 build` with `PACKAGE_MANAGER=bun` worked end to end in the sandbox. The frontend build is `tsc && vite build`; bindings come from `wails3 generate bindings -clean=true -ts -i` (`port-sandbox/app/build/Taskfile.yml:191`).
 - **Release flow:**
-  - `scripts/set-version.ts` writes the version into `build/config.yml`, `build/windows/info.json` (the exe's version resource), `wails.exe.manifest` and `nsis/wails_tools.nsh` (the installer's version and the `DisplayVersion` it registers). All four were generated once from `config.yml`, and nothing regenerates them. `release.ts` calls it for the bump commit, and CI calls it with the tag. Regenerating `info.json` with `wails3 update build-assets` isn't an option: it recreates the deleted macOS, iOS and Linux folders and resets `info.json`'s `Comments`.
+  - `scripts/set-version.ts` writes the version into `build/config.yml`, `build/windows/info.json` (the exe's version resource), `wails.exe.manifest`, `nsis/wails_tools.nsh` (the installer's version and the `DisplayVersion` it registers) and `build/linux/nfpm/nfpm.yaml` (the packages' version). All five were generated once from `config.yml`, and nothing regenerates them. `release.ts` calls it for the bump commit, and CI calls it with the tag. Regenerating `info.json` with `wails3 update build-assets` isn't an option: it recreates the deleted macOS, iOS and Linux folders and resets `info.json`'s `Comments`.
   - **No ldflags:** the generated `BUILD_FLAGS` would need editing for `-X`. Instead the channel is a build tag passed through the Taskfile's `EXTRA_TAGS` (`wails3 task package EXTRA_TAGS=stable` builds `-tags=production,stable`; no tag means `dev`). `buildinfo.Version` reads the exe's own version resource, which `generate:syso` builds from `info.json`. So the version the updater compares is the one Windows shows, and `go run`/`go test` read `0.0.0`.
-  - `build-windows.yml` builds and packages stable on a `v*` tag and publishes the assets above; a manual run builds the same without publishing. Canary packaging is deferred (§5). NSIS is installed by the workflow if the runner lacks it.
-- **Build assets:** only `build/windows/` is needed. With the other platforms' folders deleted, the `generate:icons` task must drop its macOS outputs (`-macfilename ""`); `wails3 build` then works (`port-sandbox/app/build/Taskfile.yml`, `generate:icons`).
+  - `build.yml` builds and packages stable for Windows and Linux on a `v*` tag, and one job publishes the assets above with a single `SHA256SUMS` for both, since two uploads of it would overwrite each other; a manual run builds the same without publishing. Canary packaging is deferred (§5). NSIS is installed by the workflow if the runner lacks it.
+- **Build assets:** only `build/windows/` and `build/linux/` are needed. With the other platforms' folders deleted, the `generate:icons` task must drop its macOS outputs (`-macfilename ""`); `wails3 build` then works (`port-sandbox/app/build/Taskfile.yml`, `generate:icons`).
+- **Linux:** the default cgo build links GTK4 and WebKitGTK 6.0; `EXTRA_TAGS=purego` builds without a C toolchain or headers.
+  - Data lives in `$XDG_DATA_HOME/VexWaveData` (`~/.local/share/VexWaveData`). WebKit keeps its profile under the GTK application id, `app.vexwave.<channel>`, so channels keep separate logins.
+  - The tools come from the same projects as on Windows; ffmpeg ships as `.tar.xz`, read with `github.com/ulikunitz/xz`. The `bin/` lock is `flock`.
+  - Discord IPC is a Unix socket: `discord-ipc-N` in `$XDG_RUNTIME_DIR` (else `TMPDIR`, `TMP`, `TEMP`, `/tmp`) and its Flatpak and Snap subfolders.
+  - `wails3 task package` builds a `.deb` and an `.rpm` with nfpm. The package manager owns the binary, so the app never self-updates (`app.Updater` isn't set up) and never offers to uninstall itself (`Removable` is false).
 
 ### 3.11 Uninstaller — **med**
 

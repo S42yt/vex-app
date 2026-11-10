@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-VexWave: a Windows desktop music player on Wails v3.1.0 (Go 1.27, WebView2), with the React UI in `frontend/`.
+VexWave: a desktop music player for Windows (WebView2) and Linux (WebKitGTK 6.0) on Wails v3.1.0 and Go 1.27, with the React UI in `frontend/`.
 
 - **Spec:** `docs/wails-port-audit.md`. Its Ground rules bind every change. Where it says nothing, do what the Electrobun app does.
 - **Behavioural reference:** the Electrobun app, checked out at `../vex-app-electrobun` (the report's Port setup says how to create it). The report's `file:line` references resolve there.
