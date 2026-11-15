@@ -143,11 +143,17 @@ const SEARCH_QUERY = "nova halcyon";
 const RESULTS: MediaSearchResult[] = (
 	[
 		["Nova Halcyon - Static Bloom (Official Video)", "Nova Halcyon", 194, still("#c084fc", "#5b21b6")],
+		["Static Bloom", "Nova Halcyon - Topic", 191, artTrack("#a855f7", "#4c1d95")],
 		["Static Bloom (Kite and Ember Remix)", "Kite and Ember", 292, artTrack("#2dd4bf", "#0f766e")],
 		["Vertigo Sunday - live at Fold Sessions", "Fold Sessions", 241, still("#fb7185", "#7f1d1d")],
 		["Neon Arboretum (Visualizer)", "Nova Halcyon", 302, still("#818cf8", "#312e81")],
+		["Nova Halcyon - Evening Static [Lyrics]", "Lyric Lantern", 162, still("#38bdf8", "#0c4a6e")],
+		["static bloom but it's slowed + reverb", "drowsy edits", 248, still("#f472b6", "#831843")],
 		["Nova Halcyon - Nightline, full set", "Nightline Radio", 2480, still("#fbbf24", "#7c2d12")],
 		["Neon Arboretum - full album", "Nova Halcyon", 2287, artTrack("#f472b6", "#701a75")],
+		["Paper Lanterns (Nova Halcyon cover)", "Ivo Marlow", 215, still("#fb923c", "#7c2d12")],
+		["Nova Halcyon: Tiny Room Concert", "Tiny Room", 1104, still("#a3e635", "#365314")],
+		["Nova Halcyon - Halfway Signal (Audio)", "Nova Halcyon", 236, artTrack("#60a5fa", "#1e3a8a")],
 	] as const
 ).map(([title, artist, durationSec, thumbnailUrl], index) => ({
 	id: `youtube-${index + 1}`,
@@ -159,19 +165,30 @@ const RESULTS: MediaSearchResult[] = (
 }));
 
 /**
- * A download in flight, so a Discover card shows the spinner, the progress bar
- * and the status line - otherwise that state is hover-only and a still frame
- * can't reach it. Set to `null` for a plain grid.
+ * Downloads in flight or failed, so the Discover results show the progress and
+ * the retry states, which a still frame can't otherwise reach. Empty for a
+ * plain result list.
  */
-const RUNNING_IMPORT: ImportJob | null = {
-	id: "import-1",
-	url: RESULTS[3].url,
-	title: RESULTS[3].title,
-	step: "downloading",
-	receivedBytes: 4_100_000,
-	totalBytes: 9_800_000,
-	error: null,
-};
+const IMPORTS: ImportJob[] = [
+	{
+		id: "import-1",
+		url: RESULTS[2].url,
+		title: RESULTS[2].title,
+		step: "downloading",
+		receivedBytes: 4_100_000,
+		totalBytes: 9_800_000,
+		error: null,
+	},
+	{
+		id: "import-2",
+		url: RESULTS[5].url,
+		title: RESULTS[5].title,
+		step: "error",
+		receivedBytes: 0,
+		totalBytes: null,
+		error: "Video unavailable in your country",
+	},
+];
 
 /** The README shots: playing, a little under halfway in. */
 const PLAYING = { index: 0, atSec: 83 } as const;
@@ -357,7 +374,7 @@ uninstallService.getSnapshot = () => UNINSTALL;
 // fetch is stubbed out as well as its state.
 uninstallService.check = async () => {};
 importService.jobFor = (url: string) =>
-	RUNNING_IMPORT && url === RUNNING_IMPORT.url ? RUNNING_IMPORT : null;
+	IMPORTS.find((job) => job.url === url) ?? null;
 
 playerController.equalizer.restore(EQUALIZER);
 // Through the setters, because `Effects` is session-only and so has no `restore`

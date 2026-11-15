@@ -1,7 +1,13 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { AlertCircle, Compass, RotateCw, SearchX } from "lucide-react";
 import { importService, parseImportUrl } from "@/api/ImportService";
-import { DiscoverCard, DiscoverCardSkeleton } from "@/components/DiscoverCard";
+import {
+	ResultRow,
+	ResultRowSkeleton,
+	TopResult,
+	TopResultSkeleton,
+	type DiscoverItem,
+} from "@/components/DiscoverResults";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { PLATFORM_ORDER, PLATFORMS } from "@/components/Platforms";
@@ -10,25 +16,18 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn, countLabel } from "@/lib/utils";
-import type { ImportJob } from "@/api/ImportService";
-import type { MediaSearchResult, SearchSource } from "@/api/types";
+import type { SearchSource } from "@/api/types";
 import { discoverService } from "@/api/DiscoverService";
 import { useStore } from "@/lib/store";
 
-const RESULT_GRID = "grid grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-3 p-4";
-
-interface ResultCard {
-	result: MediaSearchResult;
-	job: ImportJob | null;
-	downloadable: boolean;
-}
+const SECTION_TITLE = "mb-2.5 text-sm font-semibold";
 
 export function DiscoverView() {
 	const discover = useStore(discoverService);
 	const { imports } = useStore(importService);
 	const [input, setInput] = useState(discover.query);
 
-	const cards = useMemo<ResultCard[]>(
+	const items = useMemo<DiscoverItem[]>(
 		() =>
 			discover.results.map((result) => {
 				const url = parseImportUrl(result.url);
@@ -83,8 +82,8 @@ export function DiscoverView() {
 
 			{discover.loading ? (
 				<ResultSkeletons />
-			) : cards.length > 0 ? (
-				<ResultGrid cards={cards} onDownload={discoverService.download} />
+			) : items.length > 0 ? (
+				<Results items={items} />
 			) : discover.error ? (
 				<EmptyState
 					icon={<AlertCircle className="h-8 w-8" />}
@@ -114,27 +113,27 @@ export function DiscoverView() {
 	);
 }
 
-function ResultGrid({
-	cards,
-	onDownload,
-}: {
-	cards: readonly ResultCard[];
-	onDownload: (result: MediaSearchResult) => void;
-}) {
+function Results({ items: [top, ...rest] }: { items: readonly DiscoverItem[] }) {
 	return (
 		<ScrollArea className="min-h-0 flex-1">
-			<ul className={RESULT_GRID}>
-				{cards.map(({ result, job, downloadable }) => (
-					<li key={result.id}>
-						<DiscoverCard
-							result={result}
-							job={job}
-							downloadable={downloadable}
-							onDownload={onDownload}
-						/>
-					</li>
-				))}
-			</ul>
+			<div className="space-y-6 p-5">
+				<section>
+					<h3 className={SECTION_TITLE}>Top result</h3>
+					<TopResult {...top} />
+				</section>
+				{rest.length > 0 && (
+					<section>
+						<h3 className={SECTION_TITLE}>Other results</h3>
+						<ol className="flex flex-col gap-0.5">
+							{rest.map((item, i) => (
+								<li key={item.result.id}>
+									<ResultRow {...item} position={i + 2} />
+								</li>
+							))}
+						</ol>
+					</section>
+				)}
+			</div>
 		</ScrollArea>
 	);
 }
@@ -179,14 +178,13 @@ function SourceToggle({
 
 function ResultSkeletons() {
 	return (
-		<div className="min-h-0 flex-1 overflow-hidden">
-			<ul aria-hidden="true" className={RESULT_GRID}>
-				{Array.from({ length: 12 }, (_, i) => (
-					<li key={i}>
-						<DiscoverCardSkeleton index={i} />
-					</li>
+		<div aria-hidden="true" className="min-h-0 flex-1 space-y-6 overflow-hidden p-5">
+			<TopResultSkeleton />
+			<div className="space-y-0.5">
+				{Array.from({ length: 8 }, (_, i) => (
+					<ResultRowSkeleton key={i} index={i} />
 				))}
-			</ul>
+			</div>
 		</div>
 	);
 }
