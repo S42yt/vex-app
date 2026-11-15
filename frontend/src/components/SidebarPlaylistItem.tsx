@@ -43,17 +43,10 @@ export const SidebarPlaylistItem = memo(function SidebarPlaylistItem({
 			}}
 			aria-current={active ? "page" : undefined}
 			className={cn(
-				"group relative flex w-full items-center gap-2.5 rounded-lg py-1.5 pl-2 pr-1.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring",
-				active ? "bg-accent" : "hover:bg-accent/50",
+				"group flex w-full items-center gap-2.5 rounded-lg py-1.5 pl-2 pr-1.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring",
+				active ? "bg-nav/15" : "hover:bg-foreground/5",
 			)}
 		>
-			<span
-				aria-hidden="true"
-				className={cn(
-					"absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-all duration-200",
-					active ? "scale-y-100 opacity-100" : "scale-y-0 opacity-0",
-				)}
-			/>
 			<div className="relative h-7 w-7 shrink-0">
 				<NowPlayingRing ownsQueue={ownsQueue} playing={playing} />
 				<PlaylistCover
@@ -69,7 +62,7 @@ export const SidebarPlaylistItem = memo(function SidebarPlaylistItem({
 					ownsQueue
 						? "text-primary"
 						: active
-							? "text-accent-foreground"
+							? "text-foreground"
 							: "text-muted-foreground group-hover:text-foreground",
 				)}
 			>

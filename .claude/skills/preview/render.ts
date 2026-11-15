@@ -43,7 +43,7 @@ const EDGE = [
  * Text that proves `<App/>` actually mounted, rather than the page being blank
  * or the tree having thrown — a blank render is the right size, is `rgba` and
  * has a transparent corner, so no check on the file itself would notice. It is
- * the app bar's log-out action, which every view carries; deliberately not
+ * the sidebar's log-out action, which every view carries; deliberately not
  * "VexWave", which is in the page's `<title>` and would match a dead page.
  *
  * Nothing here knows what the preview is *of*. That is the harness's business,

@@ -13,39 +13,22 @@ export type MainView =
 
 export type MainViewName = MainView["name"];
 
-const SECTION_OF = {
-	library: "library",
-	playlists: "library",
-	artists: "library",
-	discover: "discover",
-	settings: "settings",
-} as const satisfies Record<MainViewName, MainViewName>;
-
-export type SectionName = {
-	[V in MainViewName]: (typeof SECTION_OF)[V] extends V ? V : never;
-}[MainViewName];
-
-const HOME_SECTION: SectionName = "library";
-
 function hasDetail(name: MainViewName): name is DetailViewName {
 	return (DETAIL_VIEWS as readonly MainViewName[]).includes(name);
-}
-
-export function sectionOf(view: MainView): SectionName {
-	return SECTION_OF[view.name];
 }
 
 function viewOf(name: MainViewName): MainView {
 	return hasDetail(name) ? { name, openId: null } : { name };
 }
 
+const HOME: MainView = { name: "library" };
+
 export function openIdOf(view: MainView): number | null {
 	return "openId" in view ? view.openId : null;
 }
 
 export class NavigationService extends Store<MainView> {
-	private resume = new Map<SectionName, MainView>();
-	protected snapshot: MainView = viewOf(HOME_SECTION);
+	protected snapshot: MainView = HOME;
 
 	constructor() {
 		super();
@@ -66,22 +49,16 @@ export class NavigationService extends Store<MainView> {
 		this.set({ name: "artists", openId: artistId });
 	};
 
-	showSection = (name: SectionName): void => {
-		this.set(this.resume.get(name) ?? viewOf(name));
-	};
-
 	private set(view: MainView): void {
 		const current = this.snapshot;
 		if (current.name === view.name && openIdOf(current) === openIdOf(view)) {
 			return;
 		}
-		this.resume.set(sectionOf(view), view);
 		this.publish(view);
 	}
 
 	private reset(): void {
-		this.resume.clear();
-		this.set(viewOf(HOME_SECTION));
+		this.set(HOME);
 	}
 }
 

@@ -24,7 +24,6 @@
 	--input: oklch(0.922 0 0);
 	--ring: oklch(0.708 0 0);
 	--nav: hsl(270 88% 58%);
-	--nav-edge: hsl(270 85% 66%);
 	--nav-bright: hsl(270 82% 78%);
 }
 
@@ -73,13 +72,11 @@
 	--color-input: var(--input);
 	--color-ring: var(--ring);
 	--color-nav: var(--nav);
-	--color-nav-edge: var(--nav-edge);
 	--color-nav-bright: var(--nav-bright);
 }
 
 @theme {
 	--font-wordmark: Outfit, ui-sans-serif, system-ui, sans-serif;
-	--ease-swift: cubic-bezier(0.22, 0.7, 0.2, 1);
 	--animate-equalize: equalize 1.2s ease-in-out infinite;
 
 	@keyframes equalize {

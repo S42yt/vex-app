@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { AppHeader } from "@/components/AppHeader";
+import { AppSidebar } from "@/components/AppSidebar";
 import { AppUpdateBanner } from "@/components/AppUpdateBanner";
 import { ArtistsView } from "@/components/ArtistsView";
 import { BinarySetupScreen } from "@/components/BinarySetupScreen";
@@ -10,7 +10,6 @@ import { Logo } from "@/components/Logo";
 import { NoticeBanner } from "@/components/NoticeBanner";
 import { PlayerBar } from "@/components/PlayerBar";
 import { PlaylistsView } from "@/components/PlaylistsView";
-import { SECTIONS } from "@/components/Sections";
 import { SettingsView } from "@/components/SettingsView";
 import { TrackList } from "@/components/TrackList";
 import { UploadReviewDialog } from "@/components/UploadReviewDialog";
@@ -21,7 +20,7 @@ import { useStore } from "@/lib/store";
 import { libraryService } from "@/api/LibraryService";
 import { sessionService } from "@/api/SessionService";
 import { playerController } from "@/player/PlayerController";
-import { navigationService, sectionOf } from "@/api/NavigationService";
+import { navigationService } from "@/api/NavigationService";
 import { downloadService } from "@/api/DownloadService";
 
 const VIEWS: Record<MainViewName, ComponentType> = {
@@ -39,9 +38,7 @@ function App() {
 	const library = useStore(libraryService);
 	const downloads = useStore(downloadService);
 	const view = useStore(navigationService);
-	const section = sectionOf(view);
 	const MainViewComponent = VIEWS[view.name];
-	const { Aside } = SECTIONS[section];
 	if (binaries.phase !== "ready") return <BinarySetupScreen />;
 
 	if (session.restoring) {
@@ -56,35 +53,34 @@ function App() {
 
 	return (
 		<div className="flex h-screen flex-col bg-background text-foreground">
-			<AppHeader />
-			<AppUpdateBanner />
-			<YtDlpUpdateBanner />
+			<div className="flex min-h-0 flex-1">
+				<AppSidebar />
+				<div className="flex min-w-0 flex-1 flex-col">
+					<AppUpdateBanner />
+					<YtDlpUpdateBanner />
 
-			<main className="flex min-h-0 flex-1 gap-4 p-4">
-				{Aside && <Aside />}
-				<div className="min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border bg-linear-to-b from-card to-card/40 shadow-xs">
-					<div
+					<main
 						key={view.name}
-						className="h-full duration-200 animate-in fade-in motion-reduce:animate-none"
+						className="min-h-0 flex-1 overflow-hidden duration-200 animate-in fade-in motion-reduce:animate-none"
 					>
 						<MainViewComponent />
-					</div>
-				</div>
-			</main>
+					</main>
 
-			<ErrorBanner error={state.error} className="border-t" />
-			<ErrorBanner
-				error={library.error && `Server library: ${library.error}`}
-				className="border-t"
-			/>
-			<ErrorBanner
-				error={downloads.error && `Download: ${downloads.error.message}`}
-				className="border-t"
-			/>
-			<NoticeBanner
-				notice={downloads.done && `Saved to ${downloads.done.path}`}
-				className="border-t"
-			/>
+					<ErrorBanner error={state.error} className="border-t" />
+					<ErrorBanner
+						error={library.error && `Server library: ${library.error}`}
+						className="border-t"
+					/>
+					<ErrorBanner
+						error={downloads.error && `Download: ${downloads.error.message}`}
+						className="border-t"
+					/>
+					<NoticeBanner
+						notice={downloads.done && `Saved to ${downloads.done.path}`}
+						className="border-t"
+					/>
+				</div>
+			</div>
 
 			<PlayerBar />
 

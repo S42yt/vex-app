@@ -103,8 +103,8 @@ be a coin toss. Keyframe animations are left alone.
 ## What the script checks, and what it can't
 
 Per shot: the file exists, is `rgba`, is the expected size, has a **transparent
-corner** (an opaque one means the backdrop broke), and the DOM contains the app
-bar's log-out action — which proves `<App/>` mounted rather than the page being
+corner** (an opaque one means the backdrop broke), and the DOM contains the
+sidebar's log-out action — which proves `<App/>` mounted rather than the page being
 blank or thrown. It also reports if the app's window size in `main.go`
 has drifted from what the harness frames.
 
