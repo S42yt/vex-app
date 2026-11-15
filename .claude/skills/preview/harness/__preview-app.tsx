@@ -55,8 +55,7 @@ import App from "./App";
 
 // ===========================================================================
 // ARTWORK - data URIs, so a preview needs no network and nothing real or
-// copyrighted ends up in a picture. `crossOrigin="anonymous"` on a `data:` URL
-// still leaves the canvas `lib/coverFit.ts` reads back untainted.
+// copyrighted ends up in a picture.
 // ===========================================================================
 
 const svgUrl = (body: string, width: number, height: number) =>
@@ -72,34 +71,6 @@ const grad = (from: string, to: string) =>
 /** A square sleeve: track covers, playlist covers, artist avatars. */
 const cover = (from: string, to: string) =>
 	svgUrl(`${grad(from, to)}<rect width="256" height="256" fill="url(#g)"/>`, 256, 256);
-
-/**
- * A 16:9 still: a picture reaching both edges, so `coverFit` measures its side
- * bands as picture rather than dead space and the sleeve letterboxes it over a
- * blurred copy of itself.
- */
-const still = (from: string, to: string) =>
-	svgUrl(
-		`${grad(from, to)}<rect width="480" height="270" fill="url(#g)"/>` +
-			`<circle cx="330" cy="96" r="58" fill="#ffffff" fill-opacity="0.22"/>` +
-			`<path d="M0 186 L120 138 L246 196 L360 150 L480 200 L480 270 L0 270 Z" fill="#000000" fill-opacity="0.42"/>` +
-			`<path d="M0 214 L150 174 L300 224 L480 176 L480 270 L0 270 Z" fill="#000000" fill-opacity="0.34"/>`,
-		480,
-		270,
-	);
-
-/**
- * An "art track": a square cover centred in a 16:9 frame with flat bars, which
- * is what `coverFit` crops away so the cover fills the sleeve. Use it beside
- * `still` when a Discover preview should show both fits.
- */
-const artTrack = (from: string, to: string) =>
-	svgUrl(
-		`${grad(from, to)}<rect width="480" height="270" fill="#0c0c0e"/>` +
-			`<rect x="105" width="270" height="270" fill="url(#g)"/>`,
-		480,
-		270,
-	);
 
 // ===========================================================================
 // DATA - rewrite all of this for the preview being asked for. Names are
@@ -142,18 +113,18 @@ const SEARCH_QUERY = "nova halcyon";
 
 const RESULTS: MediaSearchResult[] = (
 	[
-		["Nova Halcyon - Static Bloom (Official Video)", "Nova Halcyon", 194, still("#c084fc", "#5b21b6")],
-		["Static Bloom", "Nova Halcyon - Topic", 191, artTrack("#a855f7", "#4c1d95")],
-		["Static Bloom (Kite and Ember Remix)", "Kite and Ember", 292, artTrack("#2dd4bf", "#0f766e")],
-		["Vertigo Sunday - live at Fold Sessions", "Fold Sessions", 241, still("#fb7185", "#7f1d1d")],
-		["Neon Arboretum (Visualizer)", "Nova Halcyon", 302, still("#818cf8", "#312e81")],
-		["Nova Halcyon - Evening Static [Lyrics]", "Lyric Lantern", 162, still("#38bdf8", "#0c4a6e")],
-		["static bloom but it's slowed + reverb", "drowsy edits", 248, still("#f472b6", "#831843")],
-		["Nova Halcyon - Nightline, full set", "Nightline Radio", 2480, still("#fbbf24", "#7c2d12")],
-		["Neon Arboretum - full album", "Nova Halcyon", 2287, artTrack("#f472b6", "#701a75")],
-		["Paper Lanterns (Nova Halcyon cover)", "Ivo Marlow", 215, still("#fb923c", "#7c2d12")],
-		["Nova Halcyon: Tiny Room Concert", "Tiny Room", 1104, still("#a3e635", "#365314")],
-		["Nova Halcyon - Halfway Signal (Audio)", "Nova Halcyon", 236, artTrack("#60a5fa", "#1e3a8a")],
+		["Static Bloom", "Nova Halcyon", 194, cover("#c084fc", "#5b21b6")],
+		["Static Bloom (Acoustic)", "Nova Halcyon", 211, cover("#a855f7", "#4c1d95")],
+		["Static Bloom (Kite and Ember Remix)", "Kite and Ember & Nova Halcyon", 292, cover("#2dd4bf", "#0f766e")],
+		["Vertigo Sunday", "Lyra Wen & Nova Halcyon", 241, cover("#fb7185", "#7f1d1d")],
+		["Neon Arboretum", "Nova Halcyon", 302, cover("#818cf8", "#312e81")],
+		["Evening Static", "Nova Halcyon", 162, cover("#38bdf8", "#0c4a6e")],
+		["Static Bloom (Slowed)", "drowsy edits", 248, cover("#f472b6", "#831843")],
+		["Nightline", "Nova Halcyon", 268, cover("#fbbf24", "#7c2d12")],
+		["Slow Cartography", "Silvermoth & Nova Halcyon", 251, cover("#f472b6", "#701a75")],
+		["Paper Lanterns", "Ivo Marlow", 215, cover("#fb923c", "#7c2d12")],
+		["Halfway Signal", "Nova Halcyon", 236, cover("#a3e635", "#365314")],
+		["Static Bloom", "Tiny Room Sessions", 203, cover("#60a5fa", "#1e3a8a")],
 	] as const
 ).map(([title, artist, durationSec, thumbnailUrl], index) => ({
 	id: `youtube-${index + 1}`,

@@ -74,10 +74,7 @@ against the app's real types and a store that changed shape is a compile error
 rather than a wrong picture.
 
 Conventions worth keeping: names fictional, and artwork as **gradient SVG data
-URIs** — no network, nothing copyrighted, and `crossOrigin="anonymous"` on a
-`data:` URL still leaves the canvas `lib/coverFit.ts` reads back untainted.
-`still()` and `artTrack()` are a pair, so a Discover preview can show both
-branches of that measurement.
+URIs** — no network, nothing copyrighted.
 
 ## How the picture is made
 

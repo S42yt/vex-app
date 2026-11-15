@@ -1,12 +1,11 @@
-import { memo, useState } from "react";
-import { Ban, Download, Loader2, Music, RotateCw } from "lucide-react";
+import { memo } from "react";
+import { Ban, Download, Loader2, RotateCw } from "lucide-react";
 import { discoverService } from "@/api/DiscoverService";
 import { importPercent, importStatusLabel } from "@/api/ImportService";
+import { TrackArtwork } from "@/components/TrackArtwork";
 import { Button } from "@/components/ui/button";
-import { knownCoverFit, measureCoverFit } from "@/lib/coverFit";
 import { cn, formatTime } from "@/lib/utils";
 import type { ImportJob } from "@/api/ImportService";
-import type { CoverFit } from "@/lib/coverFit";
 import type { MediaSearchResult } from "@/api/types";
 
 export interface DiscoverItem {
@@ -20,9 +19,7 @@ export const TopResult = memo(function TopResult(item: DiscoverItem) {
 	const percent = job ? importPercent(job) : null;
 	return (
 		<div className="flex items-center gap-5 rounded-xl border bg-muted/30 p-4">
-			<div className="relative aspect-video w-2/5 max-w-60 shrink-0 overflow-hidden rounded-lg bg-muted">
-				<ResultArt url={result.thumbnailUrl} wide />
-			</div>
+			<TrackArtwork coverUrl={result.thumbnailUrl} className="size-32 rounded-lg" iconClassName="size-9" />
 			<div className="min-w-0 flex-1 space-y-3">
 				<div className="space-y-1">
 					<p className="line-clamp-2 text-lg font-semibold leading-snug" title={result.title}>
@@ -54,9 +51,7 @@ export const ResultRow = memo(function ResultRow({
 			<span className="w-5 shrink-0 text-center text-xs tabular-nums text-muted-foreground">
 				{position}
 			</span>
-			<span className="relative size-11 shrink-0 overflow-hidden rounded-md bg-muted shadow-xs">
-				<ResultArt url={result.thumbnailUrl} />
-			</span>
+			<TrackArtwork coverUrl={result.thumbnailUrl} className="size-11" />
 			<div className="min-w-0 flex-1">
 				<p className="truncate text-sm font-medium" title={result.title}>
 					{result.title}
@@ -79,7 +74,7 @@ export const ResultRow = memo(function ResultRow({
 export function TopResultSkeleton() {
 	return (
 		<div className="flex animate-pulse items-center gap-5 rounded-xl border bg-muted/30 p-4">
-			<div className="aspect-video w-2/5 max-w-60 shrink-0 rounded-lg bg-foreground/10" />
+			<div className="size-32 shrink-0 rounded-lg bg-foreground/10" />
 			<div className="flex-1 space-y-3">
 				<div className="h-5 w-3/5 rounded bg-foreground/10" />
 				<div className="h-3 w-1/4 rounded bg-foreground/10" />
@@ -202,53 +197,5 @@ function ProgressBar({ percent, className }: { percent: number; className: strin
 		<div className={cn("overflow-hidden rounded-full bg-foreground/10", className)}>
 			<div className="h-full bg-primary transition-[width] duration-200" style={{ width: `${percent}%` }} />
 		</div>
-	);
-}
-
-function ResultArt({ url, wide }: { url: string | undefined; wide?: boolean }) {
-	const [measured, setMeasured] = useState<CoverFit | null>(null);
-	const [broken, setBroken] = useState(false);
-
-	if (!url || broken) {
-		return <Music className="absolute inset-0 m-auto size-2/5 text-muted-foreground" />;
-	}
-
-	const fit = measured ?? knownCoverFit(url) ?? "contain";
-	// coverFit's "cover" means a square picture, so it fills a square frame but needs a backdrop in a wide one.
-	const fills = fit === (wide ? "contain" : "cover");
-
-	return (
-		<>
-			{!fills && (
-				<img
-					src={url}
-					alt=""
-					aria-hidden="true"
-					className={cn(
-						"absolute inset-0 h-full w-full object-cover opacity-70 blur-xl saturate-150",
-						wide ? "scale-[2]" : "scale-110",
-					)}
-				/>
-			)}
-			<img
-				src={url}
-				alt=""
-				loading="lazy"
-				crossOrigin="anonymous"
-				onLoad={(e) => {
-					const next = measureCoverFit(url, e.currentTarget);
-					if (next !== fit) setMeasured(next);
-				}}
-				onError={() => setBroken(true)}
-				className={cn(
-					"absolute inset-y-0 h-full",
-					fills
-						? "inset-x-0 w-full object-cover"
-						: wide
-							? "left-1/2 aspect-square -translate-x-1/2 object-cover"
-							: "inset-x-0 w-full object-contain",
-				)}
-			/>
-		</>
 	);
 }
