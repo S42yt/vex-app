@@ -232,8 +232,8 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | Managed binaries | `BinaryManager.ts` | yt-dlp, ffmpeg/ffprobe, deno | Same; `archive/zip` instead of `tar`; `os.Rename` replaces; `VexWaveData\bin` shared by all channels under a cross-process `bin\.lock` | Yes | med | test (`TestRenameReplaces`, `datadirs/binlock_test.go`) |
 | yt-dlp plumbing | `ytDlp.ts` | UTF-8, PATH, proxy env, lines, failures | `exec.CommandContext` + `CREATE_NO_WINDOW`; append `PATH=` | Yes: simpler | med | test (`port-sandbox/gotests/winproc`) |
 | URL import | `UrlImporter.ts`, `ImportService.ts` | One import at a time | Worker goroutine; output staged straight into upload | Yes | med | test (`port-sandbox/gotests/importer`) |
-| Discover search | `MediaSearch.ts` | Newest query wins | `context.WithCancelCause` | Yes | low | test (`port-sandbox/gotests/search`) |
-| Search ranking | `searchRanking.ts` | Re-rank one page | Go port with rune lengths, case folding, stable sort | Yes (§3.5) | med | test (`port-sandbox/gotests/ranking`) |
+| Discover search | `MediaSearch.ts` | Newest query wins | `context.WithCancelCause`; YouTube asks YouTube Music's Songs search over HTTP instead of yt-dlp (§3.5) | Yes | low | test (`port-sandbox/gotests/search`) |
+| Search ranking | `searchRanking.ts` | Re-rank one page | Go port with rune lengths, case folding, stable sort; SoundCloud pages only (§3.5) | Yes (§3.5) | med | test (`port-sandbox/gotests/ranking`) |
 | Busy flags & quit guard | `index.ts:77-123` | No yt-dlp overwrite while running; no quit mid-transfer | `busy.Registry.Acquire(kind)`, atomic | Yes: race-free | med | test (`busy_test.go`) |
 | Session swap | `ApiClient.ts:95-151` | Login/logout/proxy change while requests run | Immutable session behind `atomic.Pointer`, CAS | Yes: fixes a stale-401 logout | med | test (`port-sandbox/gotests/session`) |
 | Discord Rich Presence | `DiscordPresence.ts` | Activity card over local IPC | One actor goroutine; `winio.DialPipeContext` on the named pipe | Yes: no timer fields | med | test (`presence`, `pipe`); live Discord: §7 |
@@ -421,6 +421,8 @@ Two more findings:
 
 ### 3.5 Search ranking — **med**
 
+**Changed after the port (2026-11-15):** YouTube no longer goes through `ytsearch` and the ranker. `internal/search/ytmusic.go` posts the query to YouTube Music's `youtubei/v1/search` (client `WEB_REMIX`, the Songs filter) through `netx`, and keeps YouTube Music's order. On seven queries the user gave with the track they wanted, `ytsearch` + the ranker had it at #8, #4, #5 and #2, and three weren't in the 24 results at all. YouTube Music's Songs search has six of the seven at #1. The seventh, "holy water", is at #4 (the song release of the video the user named, under another video id), behind three other songs with that title. yt-dlp's own YouTube Music search can't stand in for it: its flat entries carry only the id and title. The ranker below now reranks SoundCloud pages only, where it still earns its place by sinking SoundCloud's 30-second previews, which often come first.
+
 `src/bun/searchRanking.ts` ported to `port-sandbox/gotests/ranking/rank.go` (301 lines). `rank_test.go` runs the same pages through the app's own `rankHits` (via bun, `port-sandbox/ranking/rank-ts.ts`) and the Go port, and compares order and every score (to 1e-9).
 
 **Data:**
@@ -455,7 +457,7 @@ Two more findings:
 - **Bin lock:** every yt-dlp run holds the shared bin lock for its whole lifetime, so the ffmpeg it starts is covered too (§3.13).
 - **Proxy env for children:** same logic as `ytDlp.ts:19-27` (yt-dlp reads `no_proxy` itself).
 - **Imports:** the worker goroutine from §3.4, writing to `VexWaveData\<channel>\imports\`. The finished file goes to `Uploads.Stage` (§3.2) as an owned file, deleted once it's uploaded or discarded. A failed job deletes its own `<id>.*` files. So `discardImport` has no caller left and is gone. A job the user dismissed before its `import:staged` arrives gets its staged entry discarded by the webview. The avatar lookup (`UrlImporter.ts:189-225`) runs as a goroutine joined before staging.
-- **Search:** §3.4. `DiscoverService` doesn't `cancel()` the previous promise; it ignores stale answers by generation, as today.
+- **Search:** §3.4. `DiscoverService` doesn't `cancel()` the previous promise; it ignores stale answers by generation, as today. Only the SoundCloud search runs yt-dlp, so only it takes the `busy.Search` token and the bin lock; the YouTube Music request (§3.5) is plain HTTP and blocks neither installs nor quitting.
 - **Tests** run the real spawn path against a fake `yt-dlp.exe` that `internal/ytdlp/ytdlptest` builds into the test's temp dir.
 
 ### 3.7 Discord Rich Presence — **med**
@@ -594,7 +596,7 @@ A direct port, except for where the binaries live.
 - **Unzip** with `archive/zip` instead of `System32\tar` (`:263-277`).
 - **Replacing files:** `os.Rename` replaces an existing file on Windows (`winproc_test.go`, `TestRenameReplaces`), so `rm` before rename (`:281-283`, `:325`) goes. A **running** exe can be neither replaced nor deleted: both failed with "Access is denied" (`datadirs/binlock_test.go`, `TestRunningExeCannotBeReplaced`).
 - **Cross-process lock:** `busy.Install` only excludes the app's own spawns, but two channels (a dev build and stable, later canary) can run at once on the same `bin\`. So `LockBin` (`port-sandbox/gotests/datadirs/binlock.go`) takes `LockFileEx` on `bin\.lock`:
-  - every spawn of a managed binary (yt-dlp search or import, ffprobe/ffmpeg in `Stage`) holds it **shared** while the process runs;
+  - every spawn of a managed binary (yt-dlp's SoundCloud search or an import, ffprobe/ffmpeg in `Stage`) holds it **shared** while the process runs;
   - installs and the yt-dlp update hold it **exclusive**;
   - the startup install waits for the lock;
   - a user action fails fast with `ErrBinBusy` ("another VexWave window is using or updating the tools").
@@ -758,7 +760,7 @@ internal/
   binaries/                    // BinaryService (bound) + Manager
   ytdlp/                       // Command (base args, proxy env), Lines, Tail + Failure (last ERROR: line); ytdlptest builds a fake yt-dlp.exe
   importer/                    // ImportService (bound): Start, Discard; worker goroutine; avatar
-  search/                      // SearchService (bound): Search; rank.go (pure, cases.Fold) + rank_test.go + testdata/{pages,ranked}.json
+  search/                      // SearchService (bound): Search; ytmusic.go (YouTube Music Songs search); soundcloud.go (yt-dlp scsearch, reranked); rank.go (pure, cases.Fold, SoundCloud only) + rank_test.go + testdata/{pages,ranked,music-search}.json
   presence/                    // PresenceService (bound): SetEnabled, SetNowPlaying; actor; pipe via go-winio (§3.7)
   update/                      // UpdateService (bound): app.Updater + GitHub provider (installer AssetMatcher, ChecksumAsset, HTTPClient from netx); the --update-helper mode
   uninstall/                   // UninstallService (bound): Removable, Start; the --uninstall-helper and --remove-data modes; InstallDir, which the updater's installed-copy check shares
@@ -817,4 +819,3 @@ Every claim in this report that is not yet proven is listed here. Other sections
 ## 8. Open questions
 
 1. **Renderer crash seen once (watch item).** The first version of `port-sandbox/cdp/probe-audio.ts` crashed the WebView2 renderer three runs in a row. It crashed in the step that starts playback, `/head` decoding and a Web Audio graph together. Nine isolated and combined variants (`port-sandbox/cdp/probe-crash.ts`, `probe-crash2.ts`) and the final probe never crashed. A manual try on the port didn't reproduce it either. Whether it can happen in the app is open; the manual check in §7 is how the first phase watches for it.
-2. **Search ranking quality.** The user reports that today's ranking often misses the result they wanted. The port keeps it as is (§3.5), so `ranked.json` guards against accidental change, not for quality. Reworking it is a separate task; `go test -update` rewrites the golden file when the ranking changes on purpose.

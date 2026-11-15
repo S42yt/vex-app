@@ -1,0 +1,43 @@
+{
+	"contents": {
+		"tabbedSearchResultsRenderer": {
+			"tabs": [{
+				"tabRenderer": {
+					"content": {
+						"sectionListRenderer": {
+							"contents": [
+								{"itemSectionRenderer": {"contents": []}},
+								{"musicShelfRenderer": {"contents": [
+									{"musicResponsiveListItemRenderer": {
+										"playlistItemData": {"videoId": "Q--Wk-5sXDA"},
+										"flexColumns": [
+											{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Tell Em"}]}}},
+											{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Cochise"}, {"text": " & "}, {"text": "$NOT"}, {"text": " • "}, {"text": "Tell Em"}, {"text": " • "}, {"text": "3:01"}]}}},
+											{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "260M plays"}]}}}
+										],
+										"thumbnail": {"musicThumbnailRenderer": {"thumbnail": {"thumbnails": [
+											{"url": "https://yt3.googleusercontent.com/cover=w60-h60-l90-rj", "width": 60},
+											{"url": "https://yt3.googleusercontent.com/cover=w120-h120-l90-rj", "width": 120}
+										]}}}
+									}},
+									{"musicResponsiveListItemRenderer": {
+										"flexColumns": [
+											{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Unavailable"}]}}}
+										]
+									}},
+									{"musicResponsiveListItemRenderer": {
+										"playlistItemData": {"videoId": "9novE4hIgJ4"},
+										"flexColumns": [
+											{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Tell Em"}]}}},
+											{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Rich Homie Quan"}, {"text": " • "}, {"text": "1989"}]}}}
+										]
+									}}
+								]}}
+							]
+						}
+					}
+				}
+			}]
+		}
+	}
+}
