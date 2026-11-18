@@ -80,7 +80,7 @@ func probe(ctx context.Context, bin, path string) (probed, error) {
 			cmd := platform.Command(ctx, bin, filepath.Join(bin, platform.Exe("ffmpeg")),
 				"-v", "error", "-i", path, "-map", "0:"+strconv.Itoa(s.Index), "-c", "copy", "-f", "image2pipe", "-")
 			cmd.Stdout = &buf
-			if cmd.Run() == nil {
+			if cmd.Run() == nil && buf.Len() <= MaxImageBytes {
 				res.Cover = buf.Bytes()
 			}
 			break

@@ -1,13 +1,7 @@
 import * as React from "react";
-import * as SliderPrimitive from "@radix-ui/react-slider";
+import { Slider as SliderPrimitive } from "radix-ui";
 
-import { cn } from "@/lib/utils";
-
-interface SliderProps
-	extends React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> {
-	/** How the value should be read out, when the number alone doesn't say it. */
-	valueText?: string;
-}
+import { cn } from "cn";
 
 /**
  * The thumb, sitting on the value it marks.
@@ -23,67 +17,91 @@ interface SliderProps
  * `className` styles the knob, the part that is seen. The group is named so that
  * a focusable ancestor carrying a plain `group` can't light the ring.
  */
-const SliderThumb = React.forwardRef<
-	React.ElementRef<typeof SliderPrimitive.Thumb>,
-	React.ComponentPropsWithoutRef<typeof SliderPrimitive.Thumb>
->(({ className, ...props }, ref) => (
-	<SliderPrimitive.Thumb
-		ref={ref}
-		{...props}
-		className="group/thumb relative block size-0 focus-visible:outline-none"
-	>
-		<span
-			className={cn(
-				"absolute left-0 top-0 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/50 bg-background shadow transition-colors group-focus-visible/thumb:ring-1 group-focus-visible/thumb:ring-ring",
-				className,
-			)}
-		/>
-	</SliderPrimitive.Thumb>
-));
-SliderThumb.displayName = SliderPrimitive.Thumb.displayName;
+function SliderThumb({
+	className,
+	...props
+}: React.ComponentProps<typeof SliderPrimitive.Thumb>) {
+	return (
+		<SliderPrimitive.Thumb
+			data-slot="slider-thumb"
+			{...props}
+			className="group/thumb relative block size-0 focus-visible:outline-hidden"
+		>
+			<span
+				className={cn(
+					"absolute top-0 left-0 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-white shadow-sm ring-ring/50 transition-[color,box-shadow] group-hover/thumb:ring-4 group-focus-visible/thumb:ring-4",
+					className,
+				)}
+			/>
+		</SliderPrimitive.Thumb>
+	);
+}
 
-const Slider = React.forwardRef<
-	React.ElementRef<typeof SliderPrimitive.Root>,
-	SliderProps
->(
-	(
-		{
-			className,
-			// What names and describes the control is pulled off the root and put on
-			// the thumb (not upstream shadcn): the thumb is what carries
-			// `role="slider"`, and Radix only names it itself when there is more
-			// than one. Left on the root these reach a plain span, and the control
-			// has no accessible name at all.
-			"aria-label": ariaLabel,
-			"aria-labelledby": ariaLabelledBy,
-			"aria-describedby": ariaDescribedBy,
-			valueText,
-			...props
-		},
-		ref,
-	) => (
+function Slider({
+	className,
+	defaultValue,
+	value,
+	min = 0,
+	max = 100,
+	// What names and describes the control is pulled off the root and put on
+	// the thumb (not upstream shadcn): the thumb is what carries
+	// `role="slider"`, and Radix only names it itself when there is more
+	// than one. Left on the root these reach a plain span, and the control
+	// has no accessible name at all.
+	"aria-label": ariaLabel,
+	"aria-labelledby": ariaLabelledBy,
+	"aria-describedby": ariaDescribedBy,
+	valueText,
+	...props
+}: React.ComponentProps<typeof SliderPrimitive.Root> & {
+	/** How the value should be read out, when the number alone doesn't say it. */
+	valueText?: string;
+}) {
+	const _values = React.useMemo(
+		() =>
+			Array.isArray(value)
+				? value
+				: Array.isArray(defaultValue)
+					? defaultValue
+					: [min, max],
+		[value, defaultValue, min, max],
+	);
+
+	return (
 		<SliderPrimitive.Root
-			ref={ref}
+			data-slot="slider"
+			defaultValue={defaultValue}
+			value={value}
+			min={min}
+			max={max}
 			className={cn(
 				// The height is the thumb's, which no longer sets it: it is the band
 				// the pointer can grab, and the track alone would leave 6px of it.
-				"relative flex h-4 w-full touch-none select-none items-center data-[disabled]:opacity-50",
+				"relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=horizontal]:h-4 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
 				className,
 			)}
 			{...props}
 		>
-			<SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-primary/20">
-				<SliderPrimitive.Range className="absolute h-full bg-primary" />
+			<SliderPrimitive.Track
+				data-slot="slider-track"
+				className="relative grow overflow-hidden rounded-full bg-muted data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
+			>
+				<SliderPrimitive.Range
+					data-slot="slider-range"
+					className="absolute bg-primary data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+				/>
 			</SliderPrimitive.Track>
-			<SliderThumb
-				aria-label={ariaLabel}
-				aria-labelledby={ariaLabelledBy}
-				aria-describedby={ariaDescribedBy}
-				aria-valuetext={valueText}
-			/>
+			{Array.from({ length: _values.length }, (_, index) => (
+				<SliderThumb
+					key={index}
+					aria-label={ariaLabel}
+					aria-labelledby={ariaLabelledBy}
+					aria-describedby={ariaDescribedBy}
+					aria-valuetext={valueText}
+				/>
+			))}
 		</SliderPrimitive.Root>
-	),
-);
-Slider.displayName = SliderPrimitive.Root.displayName;
+	);
+}
 
 export { Slider, SliderThumb };

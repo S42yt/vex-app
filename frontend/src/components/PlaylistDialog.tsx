@@ -114,7 +114,7 @@ export function PlaylistDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-sm">
+			<DialogContent className="sm:max-w-sm">
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit playlist" : "New playlist"}</DialogTitle>
 					<DialogDescription>

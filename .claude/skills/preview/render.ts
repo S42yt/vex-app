@@ -8,7 +8,7 @@
  * `artists` at the time of writing — defaulting to `library`. `playlists@1`
  * opens that item's detail view and lands in `playlists-1.png`.
  *
- * Flags: --out=preview · --scale=1.5 · --no-check (skip the type-check) ·
+ * Flags: --out=preview · --scale=1.5 · --zoom=1 · --no-check (skip the type-check) ·
  * --keep (leave the harness in src/) · --still (see below).
  *
  * What it renders is entirely `harness/__preview-app.tsx`'s business; nothing
@@ -30,8 +30,7 @@ const VITE_ROOT = join(FRONTEND, "src");
 
 /**
  * The window the frame page draws: a 32px title bar over the app's 1200x760
- * client area. Both halves are stated in `harness/__preview.html` too —
- * changing one means changing the other, or the capture clips.
+ * client area. `harness/__preview.html` fills whatever window Edge is given.
  */
 const WINDOW = { width: 1200, height: 792 };
 
@@ -44,7 +43,7 @@ const EDGE = [
  * Text that proves `<App/>` actually mounted, rather than the page being blank
  * or the tree having thrown — a blank render is the right size, is `rgba` and
  * has a transparent corner, so no check on the file itself would notice. It is
- * the app bar's log-out action, which every view carries; deliberately not
+ * the sidebar's log-out action, which every view carries; deliberately not
  * "VexWave", which is in the page's `<title>` and would match a dead page.
  *
  * Nothing here knows what the preview is *of*. That is the harness's business,
@@ -74,6 +73,15 @@ const named = args.filter((a) => !a.startsWith("--"));
 const shots = (named.length ? named : ["library"]).map(parseShot);
 const outDir = resolve(REPO, flag("out", "preview"));
 const scale = Number(flag("scale", "1.5"));
+/**
+ * Lays the app out in a window `zoom` times smaller and raises the device scale
+ * to match, so the PNG keeps its size and the UI fills more of it.
+ */
+const zoom = Number(flag("zoom", "1"));
+const viewport = {
+	width: Math.round(WINDOW.width / zoom),
+	height: Math.round(WINDOW.height / zoom),
+};
 // On by default: the harness is rewritten for every preview, and this is what
 // catches state written against a store that has since moved on.
 const check = !args.includes("--no-check");
@@ -86,8 +94,8 @@ const keep = args.includes("--keep");
  */
 const still = args.includes("--still");
 const expected = {
-	width: Math.round(WINDOW.width * scale),
-	height: Math.round(WINDOW.height * scale),
+	width: Math.round(viewport.width * scale * zoom),
+	height: Math.round(viewport.height * scale * zoom),
 };
 
 // --- helpers ---------------------------------------------------------------
@@ -199,7 +207,7 @@ async function windowDrift(): Promise<string | null> {
 	if (Number(width) === WINDOW.width && Math.abs(Number(height) - WINDOW.height) <= 16) {
 		return null;
 	}
-	return `the app window is now ${width}x${height} but the harness frames ${WINDOW.width}x${WINDOW.height} — update WINDOW here and the sizes in harness/__preview.html`;
+	return `the app window is now ${width}x${height} but the harness frames ${WINDOW.width}x${WINDOW.height} — update WINDOW here`;
 }
 
 // --- the run ---------------------------------------------------------------
@@ -224,8 +232,8 @@ let vite: Bun.Subprocess | null = null;
 try {
 	if (check) {
 		process.stdout.write("type-checking the harness… ");
-		const tsc = await run(["bunx", "tsc", "--noEmit"]);
-		if (!tsc.ok) throw new Error(`the harness does not type-check:\n${tsc.output}`);
+		const types = await run(["bun", "check"]);
+		if (!types.ok) throw new Error(`the harness does not type-check:\n${types.output}`);
 		console.log("ok");
 	}
 
@@ -259,9 +267,9 @@ try {
 				// The rounded corners come out of the alpha channel instead of
 				// being filled in — the whole point of the transparent frame.
 				"--default-background-color=00000000",
-				`--force-device-scale-factor=${scale}`,
+				`--force-device-scale-factor=${Math.round(scale * zoom * 1000) / 1000}`,
 				// CSS px; the scale factor multiplies it into the output size.
-				`--window-size=${WINDOW.width},${WINDOW.height}`,
+				`--window-size=${viewport.width},${viewport.height}`,
 				// A budget, not a sleep: virtual time runs as fast as the page will
 				// let it, and the capture happens when the budget is spent. It has
 				// to outlast the slowest thing that settles on its own.

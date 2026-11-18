@@ -12,10 +12,14 @@ import {
 } from "lucide-react";
 import { CoverBackdrop } from "@/components/CoverBackdrop";
 import { PlaybackEffects } from "@/components/PlaybackEffects";
-import { BAR_GHOST, modeToggle } from "@/components/playerBarChrome";
+import {
+	BAR_GHOST,
+	BAR_SLIDER,
+	modeToggle,
+} from "@/components/ghostChrome";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { formatTime } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { playerController } from "@/player/PlayerController";
 import { useStore } from "@/lib/store";
 
@@ -121,6 +125,7 @@ export function PlayerBar() {
 						step={1}
 						disabled={!hasTrack}
 						onValueChange={([value]) => playerController.seek(value)}
+						className={BAR_SLIDER}
 						aria-label="Seek"
 					/>
 					<span className="w-12 text-xs tabular-nums text-muted-foreground">
@@ -149,7 +154,7 @@ export function PlayerBar() {
 					max={1}
 					step={0.01}
 					onValueChange={([value]) => playerController.setVolume(value)}
-					className="w-24"
+					className={cn("w-24", BAR_SLIDER)}
 					aria-label="Volume"
 				/>
 			</div>

@@ -140,7 +140,7 @@ export function PlaylistDetail({
 						<Button
 							variant="secondary"
 							size="sm"
-							className="rounded-full px-4"
+							className="rounded-full has-[>svg]:px-4"
 							onClick={() => setAddOpen(true)}
 						>
 							<ListPlus className="h-4 w-4" />

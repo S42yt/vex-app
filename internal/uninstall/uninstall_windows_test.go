@@ -81,19 +81,3 @@ func TestHelperWaitsThenUninstalls(t *testing.T) {
 		t.Fatalf("ran the uninstaller after %v, before the app exited", took)
 	}
 }
-
-func TestSpawnDetached(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "ran")
-	cmd := exec.Command(os.Args[0], "-test.run=^$", "detached")
-	cmd.Env = append(os.Environ(), "WRITE_MARKER="+marker)
-	if err := spawnDetached(cmd); err != nil {
-		t.Fatal(err)
-	}
-	for range 100 {
-		if got, _ := os.ReadFile(marker); string(got) == "detached" {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatal("the detached child never ran")
-}

@@ -3,7 +3,7 @@
  * below. Copied into `frontend/src/` by `render.ts` for the length of a run and
  * deleted afterwards, which is why it can import `./App` and use `@/`.
  *
- * **The data below is an example, not a fixture â€” rewrite it for whatever is
+ * **The data below is an example, not a fixture - rewrite it for whatever is
  * being previewed.** A long queue, an empty library, an artist with one track,
  * a failed download: all of it is authored here, per preview. Only the wiring at
  * the bottom is meant to survive.
@@ -54,9 +54,8 @@ import "./index.css";
 import App from "./App";
 
 // ===========================================================================
-// ARTWORK â€” data URIs, so a preview needs no network and nothing real or
-// copyrighted ends up in a picture. `crossOrigin="anonymous"` on a `data:` URL
-// still leaves the canvas `lib/coverFit.ts` reads back untainted.
+// ARTWORK - data URIs, so a preview needs no network and nothing real or
+// copyrighted ends up in a picture.
 // ===========================================================================
 
 const svgUrl = (body: string, width: number, height: number) =>
@@ -73,36 +72,8 @@ const grad = (from: string, to: string) =>
 const cover = (from: string, to: string) =>
 	svgUrl(`${grad(from, to)}<rect width="256" height="256" fill="url(#g)"/>`, 256, 256);
 
-/**
- * A 16:9 still: a picture reaching both edges, so `coverFit` measures its side
- * bands as picture rather than dead space and the sleeve letterboxes it over a
- * blurred copy of itself.
- */
-const still = (from: string, to: string) =>
-	svgUrl(
-		`${grad(from, to)}<rect width="480" height="270" fill="url(#g)"/>` +
-			`<circle cx="330" cy="96" r="58" fill="#ffffff" fill-opacity="0.22"/>` +
-			`<path d="M0 186 L120 138 L246 196 L360 150 L480 200 L480 270 L0 270 Z" fill="#000000" fill-opacity="0.42"/>` +
-			`<path d="M0 214 L150 174 L300 224 L480 176 L480 270 L0 270 Z" fill="#000000" fill-opacity="0.34"/>`,
-		480,
-		270,
-	);
-
-/**
- * An "art track": a square cover centred in a 16:9 frame with flat bars, which
- * is what `coverFit` crops away so the cover fills the sleeve. Use it beside
- * `still` when a Discover preview should show both fits.
- */
-const artTrack = (from: string, to: string) =>
-	svgUrl(
-		`${grad(from, to)}<rect width="480" height="270" fill="#0c0c0e"/>` +
-			`<rect x="105" width="270" height="270" fill="url(#g)"/>`,
-		480,
-		270,
-	);
-
 // ===========================================================================
-// DATA â€” rewrite all of this for the preview being asked for. Names are
+// DATA - rewrite all of this for the preview being asked for. Names are
 // fictional on purpose; keep them that way.
 // ===========================================================================
 
@@ -142,12 +113,18 @@ const SEARCH_QUERY = "nova halcyon";
 
 const RESULTS: MediaSearchResult[] = (
 	[
-		["Nova Halcyon â€” Static Bloom (Official Video)", "Nova Halcyon", 194, still("#c084fc", "#5b21b6")],
-		["Static Bloom (Kite and Ember Remix)", "Kite and Ember", 292, artTrack("#2dd4bf", "#0f766e")],
-		["Vertigo Sunday â€” live at Fold Sessions", "Fold Sessions", 241, still("#fb7185", "#7f1d1d")],
-		["Neon Arboretum (Visualizer)", "Nova Halcyon", 302, still("#818cf8", "#312e81")],
-		["Nova Halcyon â€” Nightline, full set", "Nightline Radio", 2480, still("#fbbf24", "#7c2d12")],
-		["Neon Arboretum â€” full album", "Nova Halcyon", 2287, artTrack("#f472b6", "#701a75")],
+		["Static Bloom", "Nova Halcyon", 194, cover("#c084fc", "#5b21b6")],
+		["Static Bloom (Acoustic)", "Nova Halcyon", 211, cover("#a855f7", "#4c1d95")],
+		["Static Bloom (Kite and Ember Remix)", "Kite and Ember & Nova Halcyon", 292, cover("#2dd4bf", "#0f766e")],
+		["Vertigo Sunday", "Lyra Wen & Nova Halcyon", 241, cover("#fb7185", "#7f1d1d")],
+		["Neon Arboretum", "Nova Halcyon", 302, cover("#818cf8", "#312e81")],
+		["Evening Static", "Nova Halcyon", 162, cover("#38bdf8", "#0c4a6e")],
+		["Static Bloom (Slowed)", "drowsy edits", 248, cover("#f472b6", "#831843")],
+		["Nightline", "Nova Halcyon", 268, cover("#fbbf24", "#7c2d12")],
+		["Slow Cartography", "Silvermoth & Nova Halcyon", 251, cover("#f472b6", "#701a75")],
+		["Paper Lanterns", "Ivo Marlow", 215, cover("#fb923c", "#7c2d12")],
+		["Halfway Signal", "Nova Halcyon", 236, cover("#a3e635", "#365314")],
+		["Static Bloom", "Tiny Room Sessions", 203, cover("#60a5fa", "#1e3a8a")],
 	] as const
 ).map(([title, artist, durationSec, thumbnailUrl], index) => ({
 	id: `youtube-${index + 1}`,
@@ -159,34 +136,38 @@ const RESULTS: MediaSearchResult[] = (
 }));
 
 /**
- * A download in flight, so a Discover card shows the spinner, the progress bar
- * and the status line â€” otherwise that state is hover-only and a still frame
- * can't reach it. Set to `null` for a plain grid.
+ * Downloads in flight or failed, so the Discover results show the progress and
+ * the retry states, which a still frame can't otherwise reach. Empty for a
+ * plain result list.
  */
-const RUNNING_IMPORT: ImportJob | null = {
-	id: "import-1",
-	url: RESULTS[3].url,
-	title: RESULTS[3].title,
-	step: "downloading",
-	receivedBytes: 4_100_000,
-	totalBytes: 9_800_000,
-	error: null,
-};
+const IMPORTS: ImportJob[] = [
+	{
+		id: "import-1",
+		url: RESULTS[2].url,
+		title: RESULTS[2].title,
+		step: "downloading",
+		receivedBytes: 4_100_000,
+		totalBytes: 9_800_000,
+		error: null,
+	},
+	{
+		id: "import-2",
+		url: RESULTS[5].url,
+		title: RESULTS[5].title,
+		step: "error",
+		receivedBytes: 0,
+		totalBytes: null,
+		error: "Video unavailable in your country",
+	},
+];
 
-/**
- * Playing, and a short way in: the seek fill ends well clear of the middle,
- * which is the one place an off-centre thumb still met it.
- */
-const PLAYING = { index: 0, atSec: 29 } as const;
+/** The README shots: playing, a little under halfway in. */
+const PLAYING = { index: 0, atSec: 83 } as const;
 
-/**
- * Both limits, twice over, and two bands left flat: where a fader's thumb sits
- * against the ends of the bank, and against the curve, is only readable at the
- * extremes.
- */
+/** A gentle smile curve, the kind a listener actually sets. */
 const EQUALIZER = {
 	enabled: true,
-	gains: [12, -12, 0, 5.5, -2.5, 0, 8, -6, 3.5, -12],
+	gains: [4.5, 3.5, 1.5, -1, -2.5, -1.5, 0.5, 2.5, 4, 3],
 };
 
 /** Slowed, driven and wet, so the player bar's effects button reads as engaged. */
@@ -201,7 +182,10 @@ const EFFECTS = {
  * Press the player bar's effects button, since nothing draws that panel until it
  * is pressed. It opens over whichever view is being rendered.
  */
-const OPEN_EFFECTS = true;
+const OPEN_EFFECTS = false;
+
+/** Scroll settings to the uninstall row instead of opening on the equalizer. */
+const SETTINGS_AT_END = false;
 
 const PRESENCE: PresenceState = {
 	enabled: true,
@@ -219,7 +203,7 @@ const UNINSTALL: UninstallState = {
 };
 
 // ===========================================================================
-// WIRING â€” derives the stores from the data above. Edit when a store changes,
+// WIRING - derives the stores from the data above. Edit when a store changes,
 // not when a preview does.
 // ===========================================================================
 
@@ -361,7 +345,7 @@ uninstallService.getSnapshot = () => UNINSTALL;
 // fetch is stubbed out as well as its state.
 uninstallService.check = async () => {};
 importService.jobFor = (url: string) =>
-	RUNNING_IMPORT && url === RUNNING_IMPORT.url ? RUNNING_IMPORT : null;
+	IMPORTS.find((job) => job.url === url) ?? null;
 
 playerController.equalizer.restore(EQUALIZER);
 // Through the setters, because `Effects` is session-only and so has no `restore`
@@ -370,6 +354,12 @@ playerController.effects.setRate(EFFECTS.rate);
 playerController.effects.setPreservePitch(EFFECTS.preservePitch);
 playerController.effects.setDrive(EFFECTS.drive);
 playerController.effects.setReverbMix(EFFECTS.reverbMix);
+
+// Under --virtual-time-budget, headless Edge runs only the first two animation
+// frames, so the player bar's cover backdrop never passed its two-frame gate.
+window.requestAnimationFrame = (callback) =>
+	window.setTimeout(() => callback(performance.now()), 16);
+window.cancelAnimationFrame = (id) => window.clearTimeout(id);
 
 // Where to land: ?view=<MainViewName>[&open=<id>].
 const params = new URLSearchParams(location.search);
@@ -400,7 +390,7 @@ createRoot(document.getElementById("root")!).render(
 setTimeout(() => {
 	// Settings only: every view scrolls through one of these, and a list scrolled
 	// to its end is a picture of its last row rather than of the view.
-	if (view === "settings") {
+	if (view === "settings" && SETTINGS_AT_END) {
 		document
 			.querySelectorAll("[data-radix-scroll-area-viewport]")
 			.forEach((viewport) => {
@@ -411,6 +401,9 @@ setTimeout(() => {
 		document
 			.querySelector<HTMLButtonElement>('[aria-label="Playback effects"]')
 			?.click();
+		// The popover focuses its first control, and a scripted click counts as no
+		// pointer, so the reset button would wear a focus-visible ring.
+		setTimeout(() => (document.activeElement as HTMLElement | null)?.blur(), 100);
 	}
 }, 400);
 

@@ -45,7 +45,7 @@ type Stream struct {
 	Len    int64
 }
 
-func (c *Client) Do(ctx context.Context, method, path string, body, out any, fallback string, payload Payload) error {
+func (c *Client) do(ctx context.Context, method, path string, body, out any, what string, payload Payload) error {
 	var rd io.Reader
 	var length int64
 	switch b := body.(type) {
@@ -85,16 +85,43 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any, fal
 		}
 		return json.NewDecoder(res.Body).Decode(out)
 	}
-	return failure(res, fmt.Sprintf("%s (HTTP %d)", fallback, res.StatusCode), payload)
+	return failure(res, fmt.Sprintf("%s failed (HTTP %d)", what, res.StatusCode), payload)
 }
 
-func (c *Client) call(ctx context.Context, what, method, path string, body, out any, payload Payload) error {
-	err := c.Do(ctx, method, path, body, out, what+" failed", payload)
+func reachable(what string, err error) error {
 	var f *Failure
 	if err != nil && !errors.As(err, &f) {
 		return &Failure{Message: what + " failed — server unreachable"}
 	}
 	return err
+}
+
+type NoBody struct{}
+
+type route[Body, Resp any] struct {
+	method, path string
+	payload      Payload
+}
+
+func send[Body, Resp any](ctx context.Context, c *Client, r route[Body, Resp], what string, body Body) (Resp, error) {
+	var out Resp
+	var in, dst any = body, &out
+	if _, ok := in.(NoBody); ok {
+		in = nil
+	}
+	if _, ok := any(out).(NoBody); ok {
+		dst = nil
+	}
+	return out, r.do(ctx, c, in, dst, what)
+}
+
+func (r route[Body, Resp]) do(ctx context.Context, c *Client, body, out any, what string) error {
+	return c.do(ctx, r.method, r.path, body, out, what, r.payload)
+}
+
+func call[Body, Resp any](ctx context.Context, c *Client, r route[Body, Resp], what string, body Body) (Resp, error) {
+	out, err := send(ctx, c, r, what, body)
+	return out, reachable(what, err)
 }
 
 var proxyRejected = &Failure{Status: http.StatusProxyAuthRequired, Message: "The proxy rejected its credentials."}

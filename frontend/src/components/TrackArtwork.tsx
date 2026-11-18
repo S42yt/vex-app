@@ -17,7 +17,7 @@ export function TrackArtwork({
 	return (
 		<span
 			className={cn(
-				"relative block shrink-0 overflow-hidden rounded-md bg-muted shadow-sm ring-1 ring-inset ring-border/60 transition-shadow",
+				"relative block shrink-0 overflow-hidden rounded-md bg-muted shadow-xs ring-1 ring-inset ring-border/60 transition-shadow",
 				highlighted && "ring-primary/40",
 				className,
 			)}

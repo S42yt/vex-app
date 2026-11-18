@@ -23,7 +23,7 @@
 
 <br>
 
-<img src="assets/library.png" alt="The VexWave library, with a track playing" width="880">
+<a href="assets/library.png"><img src="assets/library.png" alt="The VexWave library, with a track playing" width="880"></a>
 
 </div>
 

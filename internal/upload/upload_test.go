@@ -69,7 +69,7 @@ func TestStreamedUploadMaxSize(t *testing.T) {
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
-	b, stop, err := body(meta{Title: "Ünïcode \"quoted\" title", Duration: 215000, ArtistIDs: []int32{3, 9}, Cover: "AQID"}, f)
+	b, stop, err := body(backend.CreateTrack{Title: "Ünïcode \"quoted\" title", Duration: 215000, ArtistIDs: []int32{3, 9}, Cover: "AQID"}, f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestPostTrackContract(t *testing.T) {
 	srv := httptest.NewServer(rec)
 	defer srv.Close()
 	c := &backend.Client{BaseURL: srv.URL, Token: "tok", HTTP: srv.Client()}
-	for _, m := range []meta{
+	for _, m := range []backend.CreateTrack{
 		{Title: "T"},
 		{Title: "T", Duration: backend.MaxDurationMs, ArtistIDs: []int32{3, 9}, Cover: "AQID"},
 	} {

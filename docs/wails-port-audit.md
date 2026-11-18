@@ -41,14 +41,14 @@ The port starts on a new branch from a **fresh `wails3 init -t react` project** 
 | Product (canary, not packaged yet, §5) | `VexWave Canary`, `Programs\VexWave Canary` | its installer config, once canary is packaged |
 | Product identifier | `app.vexwave` (an app ID only, not the old uninstaller's registry key) | `build/config.yml` `info.productIdentifier` |
 | `UNINST_KEY_NAME` (stable / canary) | `VexWave` / `VexWave Canary`. Set explicitly; the default would be `<Company><Product>` | `project.nsi`, `buildinfo` |
-| Release assets | `VexWave-windows-amd64.exe` (the bare exe the updater's default matcher picks, §3.9), `SHA256SUMS`, and `VexWave-installer.exe` (`project.nsi` writes `bin/VexWave-amd64-installer.exe`; CI renames it) for first installs. `SHA256SUMS` is `sha256sum` output for both exes; the provider strips its `*` (`wails:v3/pkg/updater/providers/github/github.go:352-375`). None is `VexWave-Setup.exe` (§5). Linux adds `VexWave-linux-amd64` and its `.deb` and `.rpm`, listed in the same `SHA256SUMS` | `build.yml` |
+| Release assets | `VexWave-installer.exe` (`project.nsi` writes `bin/VexWave-amd64-installer.exe`; CI renames it), for first installs and for updates (§3.9), and `SHA256SUMS`, its `sha256sum` output; the provider strips the `*` (`wails:v3/pkg/updater/providers/github/github.go:352-375`). No bare app exe, so nobody downloads an uninstalled copy by mistake. Not `VexWave-Setup.exe` (§5). Linux adds `VexWave-linux-amd64.deb` and `VexWave-linux-amd64.rpm`, listed in the same `SHA256SUMS` | `build.yml` |
 
 ### Layout: the Wails template's, unchanged
 
 ```
 main.go, go.mod, go.sum   Go module at the root; main.go embeds frontend/dist (//go:embed all:frontend/dist)
 internal/<pkg>/           Go packages (§6)
-frontend/                 the React app: package.json, bun.lock, vite.config.ts, tsconfig.json, tailwind + postcss configs, components.json
+frontend/                 the React app: package.json, bun.lock, vite.config.ts, tsconfig.json, components.json
 frontend/src/             the UI (was src/mainview/); the @/ alias points here
 frontend/bindings/        generated bindings, committed; CI fails when they drift
 build/                    config.yml, Taskfile.yml, appicon.png, windows/ (icon, manifest, info.json, nsis/project.nsi)
@@ -76,28 +76,28 @@ The Go side is new code. It starts from the sandbox packages (Ground rules 7) an
 | From `main` | On the branch | Form |
 |---|---|---|
 | `src/mainview/**` | `frontend/src/**` | Copied, then the §4 changes. `components/ui/` keeps what shadcn generated. |
-| `components.json` | `frontend/components.json` | Kept for the shadcn CLI (`bunx shadcn add <component>`, run in `frontend/`). `tailwind.css` becomes `src/index.css`. `tailwind.config` stays `tailwind.config.js`, now `frontend/`'s. The `@/` aliases are unchanged, because `@/` now points at `frontend/src`. The CLI resolves them through `frontend/tsconfig.json`'s `paths`. The project stays on Tailwind 3, and the CLI keeps adding Tailwind 3 components to it. |
+| `components.json` | `frontend/components.json` | Kept for the shadcn CLI (`bunx shadcn add <component>`, run in `frontend/`). `tailwind.css` becomes `src/index.css`, which also holds the theme: the project is on Tailwind 4, which has no config file, so `tailwind.config` is empty. The `@/` aliases are unchanged, because `@/` now points at `frontend/src`. The CLI resolves them through `frontend/tsconfig.json`'s `paths`. It adds shadcn's Tailwind 4 components, importing `cn` from the `cn` package; drop the `"use client"` directive it writes and indent the file with tabs. |
 | `src/shared/rpcSchema.ts` | `frontend/src/api/types.ts` | The data types only (§3.3). The `PlayerRPC` schema is dropped. |
-| `src/shared/limits.ts` | `frontend/src/lib/limits.ts` + `limits.gen.ts` | The constants are generated into `limits.gen.ts` by the same generator that writes `internal/backend/limits_gen.go` (§3.14), so they're no longer hand-mirrored. `limits.ts` keeps `base64Length` and the decoded-byte forms derived from the generated caps. |
-| `contract/contract.ts` | `contract/contract.ts` | Unchanged. It is the backend's API spec that the hand-written client follows, and the limits generator's input. `contract/package.json` holds `zod` and `@ts-rest/core`, so the frontend no longer depends on them. |
-| `port-sandbox/limits/gen.ts` | `contract/gen-limits.ts` | Rewritten to emit the Go and TS files. CI checks for drift. |
+| `src/shared/limits.ts` | `frontend/src/lib/limits.ts` + `limits.gen.ts` | The constants are generated into `limits.gen.ts` by the same generator that writes `internal/backend/contract_gen.go` (§3.14), so they're no longer hand-mirrored. `limits.ts` keeps `base64Length` and the decoded-byte forms derived from the generated caps. |
+| `contract/contract.ts` | `contract/contract.ts` | Unchanged. It is the backend's API spec and the input of `contract/gen.ts`, which generates the Go client's types, route table and limits, and the frontend's limits (§3.14). `contract/package.json` holds `zod` and `@ts-rest/core`, so the frontend no longer depends on them. |
+| `port-sandbox/limits/gen.ts` | `contract/gen.ts` | Rewritten to emit the Go and TS files, and extended to the Go client's types and route table. CI checks for drift. |
 | `scripts/test-server.ts` | `contract/test-server.ts` | Unchanged apart from its import path. It is the throwaway backend for manual end-to-end checks (§7). |
 | `port-sandbox/gotests/<pkg>` | `internal/<pkg>` | Code and tests, per the §6 map. The comparisons that need the old app's sources stay in the reference (§6). |
 | `scripts/release.ts` | `scripts/release.ts` | Same procedure, but writes the version into `build/config.yml` (§3.10). |
-| `.github/workflows/*` | same paths | Rewritten. CI runs on `windows-latest` (tsc, `go vet`, `go test -race`, and drift checks for the bindings and limits) and on `ubuntu-24.04` (`go vet`, `go test -race`). In `build.yml`, a `v*` tag builds stable for both and publishes it, as today. The manual canary run is left out until canary packaging is designed (§5). The workflow keeps its SHA-pinned actions and `persist-credentials: false`, and runs `wails3 package` instead of the fuse step. |
+| `.github/workflows/*` | same paths | Rewritten. CI runs on `windows-latest` (`bun check`, `go vet`, `go test -race`, and drift checks for the bindings and limits) and on `ubuntu-24.04` (`go vet`, `go test -race`). In `build.yml`, a `v*` tag builds stable for both and publishes it, as today. The manual canary run is left out until canary packaging is designed (§5). The workflow keeps its SHA-pinned actions and `persist-credentials: false`, and runs `wails3 package` instead of the fuse step. |
 | `.claude/skills/preview/` | same path | Paths moved to `frontend/`. The `window.__electrobun` stub is removed (§4). |
 | `assets/vex-logo.png` | `build/appicon.png` | The source for `wails3 generate icons`. |
 | `README.md`, `assets/*.png` screenshots | same paths | The stack badges are updated. |
 | `docs/wails-port-audit.md` | same path | The spec (Ground rules 3, 8). |
 
-**Frontend toolchain:** start from the template's `frontend/package.json`, which brings Vite, `@vitejs/plugin-react` and the Wails Vite plugin at the versions v3.1.0 was tested with. Add the app's runtime dependencies at their current `package.json` versions, and keep TypeScript at the repo's version. `noUnusedParameters` stays off, as in the template: the generated `Nullable<T>` binding never uses `T`. Checked in the first commit: `wails3 build` and `bunx tsc --noEmit` pass, and the preview skill's library and settings renders are byte-identical to the reference checkout's (discover differs only by its download spinner, which never renders the same twice).
+**Frontend toolchain:** start from the template's `frontend/package.json`, which brings Vite, `@vitejs/plugin-react` and the Wails Vite plugin at the versions v3.1.0 was tested with. Add the app's runtime dependencies at their current `package.json` versions, and type-check with `bun check` instead of a `typescript` dependency (it reports the same errors as tsc on both projects). `noUnusedParameters` stays off, as in the template: the generated `Nullable<T>` binding never uses `T`. Checked in the first commit: `wails3 build` and `bunx tsc --noEmit` pass, and the preview skill's library and settings renders are byte-identical to the reference checkout's (discover differs only by its download spinner, which never renders the same twice).
 
 **Not carried over:**
 - **`src/bun/**`:** reimplemented in Go.
 - **`electrobun.config.ts` and `llms.txt`:** the identifier, names and channels move into `build/config.yml` and `buildinfo`.
 - **`scripts/fuse-installer.ts`, `scripts/stamp-win-icons.ts` and `scripts/tsconfig.json`:** the second TS project exists only because bun's globals collide with the DOM lib.
 - **`assets/vex-logo.ico`:** generated from `appicon.png`.
-- **The root `package.json`, `bun.lock`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.js` and `postcss.config.js`:** replaced by `frontend/`'s, with content globs and the `@/` alias pointing at `frontend/src`. These packages leave: `electrobun`, `rcedit`, `@types/three`, `@types/bun`, `music-metadata`.
+- **The root `package.json`, `bun.lock`, `tsconfig.json`, `vite.config.ts`, `tailwind.config.js` and `postcss.config.js`:** replaced by `frontend/`'s, with the `@/` alias pointing at `frontend/src`. Tailwind runs as its Vite plugin and is configured in `frontend/src/index.css`, so the two config files have no successor. These packages leave: `electrobun`, `rcedit`, `@types/three`, `@types/bun`, `music-metadata`.
 - **`.gitignore`:** the template's, plus `/preview/` for the preview skill's output and `contract/node_modules`.
 - **All four `CLAUDE.md` files.** They describe the Electrobun app. The replacement is below.
 - **`port-sandbox/`:** stays on `main`. Its probe app, CDP harness, ranking capture and music-metadata comparison need the old app's sources and root `node_modules`, so they run from the reference checkout.
@@ -215,8 +215,8 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | RPC timeout | `maxRequestTime: 120_000` (`index.ts:127`, `rpc.ts:5`) | Electrobun's 1 s default | No call timeout; `ctx` cancelled by `promise.cancel()` | Yes | low | test: a 9 s call completed; `cancel()` → Go saw `context canceled` |
 | Pushed messages | `rpc.send.*` (5 kinds) | Progress, expiry, presence status | `application.RegisterEvent[T]` + `app.Event.Emit`; typed names in `bindings/events` | Same | low | test (`probe-bridge.ts`: typed events received) |
 | Error model | `RpcFailure` (`rpcSchema.ts:24-31`), `ApiClient.ts:425-487` | 401→login, 429 `Retry-After`, 413/407 text | Go error type; promise rejects with `RuntimeError`, `cause` = JSON of the error | Same: calls reject, `failureOf` reads the error | low | test: `cause` = `{status, retryAfterSec, error}`; plain `errors.New` → `cause: {}` |
-| Backend client | `ApiClient.ts`, `contract/contract.ts` | Typed backend calls | Hand-written `backend.Client` on `net/http` (13 routes) | Yes: one HTTP path | med | npm registry: every `@ts-rest/open-api` dist-tag peers `zod ^3` |
-| Payload limits mirror | `src/shared/limits.ts`, startup check `ApiClient.ts:39-46` | Refuse oversize payloads early | `limits_gen.go` and the frontend's `limits.gen.ts` generated from the contract with zod 4's `z.toJSONSchema` | Yes: build time, no hand mirror | low | test (`port-sandbox/limits/gen.ts` produced all 8 limits) |
+| Backend client | `ApiClient.ts`, `contract/contract.ts` | Typed backend calls | `backend.Client` on `net/http` (13 routes), its types and route table generated from the contract | Yes: one HTTP path | med | npm registry: every `@ts-rest/open-api` dist-tag peers `zod ^3`, so the generator uses zod 4's `z.toJSONSchema` |
+| Payload limits mirror | `src/shared/limits.ts`, startup check `ApiClient.ts:39-46` | Refuse oversize payloads early | `contract_gen.go`'s limits and the frontend's `limits.gen.ts` generated from the contract with zod 4's `z.toJSONSchema` | Yes: build time, no hand mirror | low | test (`port-sandbox/limits/gen.ts` produced all 8 limits) |
 | Outbound proxy | `ApiClient.ts:48-78`, `ytDlp.ts:11-28` | User/corporate proxy | `httpproxy.Config{…}.ProxyFunc()` (honours `NO_PROXY`, bypasses loopback) | Same | low | test (`port-sandbox/gotests/netx`) |
 | Proxy 407 on HTTPS | `ApiClient.ts:430-436` | Clear "proxy auth" error | `Transport.OnProxyConnectResponse` returns a typed error | Yes: typed | low | test (`TestProxy407Typed`) |
 | Certificate errors | regex on text, `ApiClient.ts:406-421` | Explain cert failures | `errors.As` → `*tls.CertificateVerificationError`, `x509.UnknownAuthorityError`, `x509.HostnameError` | Yes | low | test (`TestCertErrorsTyped`) |
@@ -232,12 +232,12 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | Managed binaries | `BinaryManager.ts` | yt-dlp, ffmpeg/ffprobe, deno | Same; `archive/zip` instead of `tar`; `os.Rename` replaces; `VexWaveData\bin` shared by all channels under a cross-process `bin\.lock` | Yes | med | test (`TestRenameReplaces`, `datadirs/binlock_test.go`) |
 | yt-dlp plumbing | `ytDlp.ts` | UTF-8, PATH, proxy env, lines, failures | `exec.CommandContext` + `CREATE_NO_WINDOW`; append `PATH=` | Yes: simpler | med | test (`port-sandbox/gotests/winproc`) |
 | URL import | `UrlImporter.ts`, `ImportService.ts` | One import at a time | Worker goroutine; output staged straight into upload | Yes | med | test (`port-sandbox/gotests/importer`) |
-| Discover search | `MediaSearch.ts` | Newest query wins | `context.WithCancelCause` | Yes | low | test (`port-sandbox/gotests/search`) |
-| Search ranking | `searchRanking.ts` | Re-rank one page | Go port with rune lengths, case folding, stable sort | Yes (§3.5) | med | test (`port-sandbox/gotests/ranking`) |
+| Discover search | `MediaSearch.ts` | Newest query wins | `context.WithCancelCause`; YouTube asks YouTube Music's Songs search over HTTP instead of yt-dlp (§3.5) | Yes | low | test (`port-sandbox/gotests/search`) |
+| Search ranking | `searchRanking.ts` | Re-rank one page | Go port with rune lengths, case folding, stable sort; SoundCloud pages only (§3.5) | Yes (§3.5) | med | test (`port-sandbox/gotests/ranking`) |
 | Busy flags & quit guard | `index.ts:77-123` | No yt-dlp overwrite while running; no quit mid-transfer | `busy.Registry.Acquire(kind)`, atomic | Yes: race-free | med | test (`busy_test.go`) |
 | Session swap | `ApiClient.ts:95-151` | Login/logout/proxy change while requests run | Immutable session behind `atomic.Pointer`, CAS | Yes: fixes a stale-401 logout | med | test (`port-sandbox/gotests/session`) |
 | Discord Rich Presence | `DiscordPresence.ts` | Activity card over local IPC | One actor goroutine; `winio.DialPipeContext` on the named pipe | Yes: no timer fields | med | test (`presence`, `pipe`); live Discord: §7 |
-| App updater | `AppUpdater.ts`, `download.ts`, `appRelease.ts`, `detachedHelper.ts` | Download, verify, install, relaunch (stable only) | `app.Updater` + GitHub provider + `SHA256SUMS`, `WindowNone`, own banner; never set up on canary | Yes: no PowerShell | med | test (`port-sandbox/gotests/updatertest`); `Restart` swap: §7 |
+| App updater | `AppUpdater.ts`, `download.ts`, `appRelease.ts`, `detachedHelper.ts` | Download, verify, install, relaunch (stable only) | `app.Updater` + GitHub provider + `SHA256SUMS`, `WindowNone`, own banner; the installer runs silently from a Go helper mode; never set up on canary | Yes: no PowerShell | med | test (`update_test.go`); installed run: §7 |
 | Uninstaller | `Uninstaller.ts`, `detachedHelper.ts` | Remove an install the app can't delete | NSIS `uninstall.exe /S` from a Go helper mode; the uninstaller runs the app's `--remove-data` mode | Yes | med | test (`datadirs_test.go`, job state); NSIS run: §7 |
 | Dark title bar & icon | `WindowChrome.ts`, `scripts/stamp-win-icons.ts` | Dark caption; embedded icon | `WindowsWindow.Theme` + `CustomTheme`; icon via build assets | Yes: deleted | low | src (`webview_window_options.go:366-372,439-450`); rendering: §7 |
 | HiDPI | `index.ts:204-222`, `bundleCEF`, `lib/devicePixelRatio.ts` | electrobun#324 | Wails manifest declares `permonitorv2` | Yes: deleted | low | test: `devicePixelRatio` 1.25 at 125 % scaling; WebView2 started with `--embedded-browser-webview-dpi-awareness=2` |
@@ -246,7 +246,7 @@ Evidence: **test** = a sandbox test or probe (path given); **src** = Wails v3.1.
 | Channels | `index.ts:18`, `AppUpdater.ts:38-39` | dev/canary/stable | the `stable` build tag; per-channel install folder from the installer, Uninstall key in `buildinfo`, and `VexWaveData\<channel>\`; canary doesn't self-update. Only stable is packaged for now (§5) | Same | low | n/a |
 | Web Audio over loopback | `AudioPlayer.ts:38-41`, `StreamProxy.ts:151-168` | `crossOrigin` media needs ACAO | Same headers from Go | Same | low | test: analyser peak 0.125 (untainted) |
 | Single instance | absent | Two copies race on `bin/`, imports | `Options.SingleInstance` | New | low | test: second launch exits in ~1 s, first gets its args |
-| Type-check / CI | `.github/workflows/ci.yml` | tsc both projects | On `windows-latest`: tsc (`frontend/`, `contract/`), `go vet`, `go test -race`, bindings and limits freshness | Yes | low | n/a |
+| Type-check / CI | `.github/workflows/ci.yml` | tsc both projects | On `windows-latest`: `bun check` (`frontend/`, `contract/`), `go vet`, `go test -race`, bindings and limits freshness | Yes | low | n/a |
 | Preview skill | `.claude/skills/preview/SKILL.md:87-92` | Headless renders | Drop the `window.__electrobun` stub | Yes | low | test: runtime + bindings import fine in headless Edge |
 
 ---
@@ -347,7 +347,7 @@ Responses are not capped: a 100 MiB return value arrived in 1.4 s.
 - **Finished imports:** the importer writes to `VexWaveData\<channel>\imports\` (today a single `%LOCALAPPDATA%\VexWave\imports` shared by all channels, `UrlImporter.ts:58`). It knows its output path (`UrlImporter.ts:134,177`) and calls `Stage` itself. `ImportService.stage()`'s fetch-into-Blob (`ImportService.ts:143-167`) is deleted.
 - **`Confirm(stagedID, edits)`:**
   - **Format:** base64 inside JSON stays, because it is the backend's current contract. If the backend later adds a raw or multipart upload endpoint, only `Confirm`'s body builder changes.
-  - Builds the contract body (`contract.ts:33-42`) as `json.Marshal(meta)` minus the closing brace, then `,"data":"`, then the file through `base64.NewEncoder` over an `io.Pipe`, then `"}`.
+  - Builds the contract body (`contract.ts:33-42`) from the generated `backend.CreateTrack` (§3.14): `json.Marshal` with an empty `data`, split at `"data":""`, with the file streamed into the gap through `base64.NewEncoder` over an `io.Pipe`.
   - `Content-Length` is exact: prefix + `base64.StdEncoding.EncodedLen(size)` + 2.
   - Evidence (`port-sandbox/gotests/upload/upload_test.go`): a 75 MiB file produced a 104 857 699-byte body, decoded byte-identical by `encoding/json`, with **0.2 MiB** allocated during the upload.
 - **Queue:** uploads run one at a time in confirm order: each `Confirm` waits for the done channel of the one confirmed before it, and holds a `busy.Transfer` token from the moment it's queued (`TestConfirmQueue`). The webview calls `Confirm` as soon as a track is confirmed, so its own queue goes. That closes the gap `AppUpdateService.ts:66-73` works around ("Bun sees only the upload in flight, not the queue behind it").
@@ -421,6 +421,8 @@ Two more findings:
 
 ### 3.5 Search ranking — **med**
 
+**Changed after the port (2026-11-15):** YouTube no longer goes through `ytsearch` and the ranker. `internal/search/ytmusic.go` posts the query to YouTube Music's `youtubei/v1/search` (client `WEB_REMIX`, the Songs filter) through `netx`, and keeps YouTube Music's order. On seven queries the user gave with the track they wanted, `ytsearch` + the ranker had it at #8, #4, #5 and #2, and three weren't in the 24 results at all. YouTube Music's Songs search has six of the seven at #1. The seventh, "holy water", is at #4 (the song release of the video the user named, under another video id), behind three other songs with that title. yt-dlp's own YouTube Music search can't stand in for it: its flat entries carry only the id and title. The ranker below now reranks SoundCloud pages only, where it still earns its place by sinking SoundCloud's 30-second previews, which often come first.
+
 `src/bun/searchRanking.ts` ported to `port-sandbox/gotests/ranking/rank.go` (301 lines). `rank_test.go` runs the same pages through the app's own `rankHits` (via bun, `port-sandbox/ranking/rank-ts.ts`) and the Go port, and compares order and every score (to 1e-9).
 
 **Data:**
@@ -455,7 +457,7 @@ Two more findings:
 - **Bin lock:** every yt-dlp run holds the shared bin lock for its whole lifetime, so the ffmpeg it starts is covered too (§3.13).
 - **Proxy env for children:** same logic as `ytDlp.ts:19-27` (yt-dlp reads `no_proxy` itself).
 - **Imports:** the worker goroutine from §3.4, writing to `VexWaveData\<channel>\imports\`. The finished file goes to `Uploads.Stage` (§3.2) as an owned file, deleted once it's uploaded or discarded. A failed job deletes its own `<id>.*` files. So `discardImport` has no caller left and is gone. A job the user dismissed before its `import:staged` arrives gets its staged entry discarded by the webview. The avatar lookup (`UrlImporter.ts:189-225`) runs as a goroutine joined before staging.
-- **Search:** §3.4. `DiscoverService` doesn't `cancel()` the previous promise; it ignores stale answers by generation, as today.
+- **Search:** §3.4. `DiscoverService` doesn't `cancel()` the previous promise; it ignores stale answers by generation, as today. Only the SoundCloud search runs yt-dlp, so only it takes the `busy.Search` token and the bin lock; the YouTube Music request (§3.5) is plain HTTP and blocks neither installs nor quitting.
 - **Tests** run the real spawn path against a fake `yt-dlp.exe` that `internal/ytdlp/ytdlptest` builds into the test's temp dir.
 
 ### 3.7 Discord Rich Presence — **med**
@@ -481,7 +483,7 @@ The login stays in `localStorage` (`storage.ts:75-79`) and is pushed to Go with 
   - renaming the exe doesn't log users out;
   - a roaming domain profile doesn't carry the WebView2 cache;
   - uninstalling a channel removes its login with `VexWaveData\<channel>\` (§3.11).
-- **`wails3 dev` has its own login:** it loads the page from `http://wails.localhost:<vite port>` (9245, `Taskfile.yml`), not `http://wails.localhost` (`wails:v3/internal/assetserver/assetserver.go:167-194`). `localStorage` is per origin, so the same `dev` profile holds one login for `wails3 dev` and another for a built dev exe.
+- **`wails3 dev` shares the built dev exe's login:** for a relative window `URL`, Wails puts the Vite port in the start URL (`wails:v3/internal/assetserver/assetserver.go:167-194`), giving `wails3 dev` its own `localStorage` origin. The window `URL` is therefore the absolute `http://wails.localhost/`, and `server.hmr.clientPort` in `vite.config.ts` points Vite's HMR socket at the dev server instead.
 - **Remote debugging:** `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` has no effect on a Wails app. Wails always passes `--disable-features=msSmartScreenProtection` through the API (`wails:v3/pkg/application/webview_window_windows.go:2586-2605`), and the debugging port never appeared on the browser command line. Use `Windows.AdditionalBrowserArgs: []string{"--remote-debugging-port=N"}` behind a dev flag: the `VEXWAVE_CDP_PORT` environment variable, honoured only by `dev` builds. Port 9222 is held by a system service on this machine, so pick another.
 
 ### 3.9 App updater — **med**
@@ -493,27 +495,28 @@ The login stays in `localStorage` (`storage.ts:75-79`) and is pushed to Go with 
 
 **Wails updater**, tested with the real v3.1.0 package against a fake GitHub API (`port-sandbox/gotests/updatertest/updater_test.go`):
 - **Setup:** `app.Updater.Init(updater.Config{CurrentVersion, Providers: [github.New(github.Config{Repository, ChecksumAsset: "SHA256SUMS", HTTPClient})], Window: updater.WindowNone})`. `github.New` returns `(*Provider, error)`.
-- **Asset choice:** the default matcher picked `VexWave-windows-amd64.exe` from among a `SHA256SUMS` and a `VexWave-Setup.exe`.
+- **Asset choice:** the default matcher picked `VexWave-windows-amd64.exe` from among a `SHA256SUMS` and a `VexWave-Setup.exe`, and skips any `*-installer.*` (`wails:v3/pkg/updater/providers/github/github.go:395-420`). Releases ship only the installer, so `Configure` sets an `AssetMatcher` that takes the asset named exactly `VexWave-installer.exe`. A release without it reads as no update.
 - **Install without a key:** `Check` → `DownloadAndInstall` reached `StateReady` with byte-identical staged bytes. All 3 requests went through the injected `HTTPClient`, which is where the user's proxy goes.
 - **Tampering:** a tampered checksum gives `updater: digest mismatch`.
-- **Staging location:** `wails-update-*` beside the running binary (seen next to the test binary). So the install dir must be user-writable, which means a per-user NSIS install (§3.10).
-- **Swap:** `Restart` re-execs the binary in helper mode, waits for the parent (30 s, `HelperReadyTimeout`), renames the old exe aside, moves the new one in and relaunches, rolling back if the launch fails (`wails:docs/mpress/content/guides/updater.md:589-601`). Its helper spawn already handles a kill-on-close job: it adds `CREATE_BREAKAWAY_FROM_JOB` and drops it if breakaway is denied (`wails:v3/pkg/updater/spawn_windows.go:17-51`). Checked end to end with an installed 0.6.1 and a fake GitHub serving 0.6.2 (debug port and API URL patched in for the test build only): the banner offered 0.6.2, the download went through the injected client, "Restart to install" swapped the exe and relaunched 0.6.2 from the same folder within a second, with the app inside the harness's kill-on-close job.
-- **A corrupt release:** a payload with a valid `MZ` header and a matching checksum passes download and verify, so the banner reaches "ready". The helper then swaps it in, fails to launch it, restores the backup and relaunches the old version. The user is never left without a working exe.
-- **Leftovers:** Wails clears a staged `wails-update-*` folder only on the next download in the same run, and leaves the replaced exe renamed to `VexWave.exe.old.<n>` because Windows won't delete it while it's still mapped (`wails:v3/pkg/updater/helper_windows.go:120-176`). `UpdateService` sweeps both beside the exe at startup; `SingleInstance` has already exited a second launch by then (`TestSweepLeftovers`, and checked in the installed app).
+- **Staging location:** `wails-update-*` beside the running binary (seen next to the test binary). So the install dir must be user-writable, which means a per-user NSIS install (§3.10). Its only check on the payload is a non-empty executable (`wails:v3/pkg/updater/validate.go:182`), which the installer passes.
+- **Swap (not used):** `Restart` re-execs the binary in helper mode, waits for the parent (30 s, `HelperReadyTimeout`), renames the old exe aside, moves the new one in and relaunches, rolling back if the launch fails (`wails:docs/mpress/content/guides/updater.md:589-601`). Its helper spawn already handles a kill-on-close job: it adds `CREATE_BREAKAWAY_FROM_JOB` and drops it if breakaway is denied (`wails:v3/pkg/updater/spawn_windows.go:17-51`). Checked end to end with an installed 0.6.1 and a fake GitHub serving 0.6.2 (debug port and API URL patched in for the test build only): the banner offered 0.6.2, the download went through the injected client, "Restart to install" swapped the exe and relaunched 0.6.2 from the same folder within a second, with the app inside the harness's kill-on-close job.
+- **A corrupt release** under the swap: a payload with a valid `MZ` header and a matching checksum passes download and verify, so the banner reaches "ready". The helper then swaps it in, fails to launch it, restores the backup and relaunches the old version.
+- **Why the installer instead:** the swap never runs NSIS, so the `DisplayVersion` in Settings → Apps, the shortcuts and `uninstall.exe` keep their first-install versions, and it needs a bare exe on the release. `Install` instead hands off through `platform.HandOff`, which the uninstaller shares (§3.11): it copies the exe to `%TEMP%` (the installer overwrites `VexWave.exe`), launches the copy detached as `--update-helper <pid> <staged installer> <exe>`, and quits. A second `Install` is refused once the hand-off has happened. The helper waits up to 2 minutes for the PID and does nothing if the app is still running. Otherwise it backs up the exe as `VexWave.exe.old`, runs `"<installer>" /S /D=<exe's folder>` with a 5-minute limit, and puts the backup back if the installer fails or times out. Either way it then relaunches the exe (`TestHelperRestoresAfterFailedInstall`). NSIS reads `/D=` only last and unquoted, so the helper sets `SysProcAttr.CmdLine` itself. The relaunch has no `HideWindow`, since `SW_HIDE` would apply to the app's first `ShowWindow`. The installer creates the desktop shortcut only on a first install, so an update doesn't bring back one the user deleted.
+- **Leftovers:** Wails clears a staged `wails-update-*` folder only on the next download in the same run. `UpdateService` sweeps it beside the exe at startup, along with the `vexwave-*-helper-*.exe` copies in `%TEMP%`; `SingleInstance` has already exited a second launch by then (`TestSweepLeftovers`, and checked in the installed app).
 
 **Channels.** Same rules as today:
 - **Stable:** checks GitHub's latest release, downloads and installs.
-- **Dev:** checks and downloads, but can't install, because it isn't an installed copy (`AppUpdater.ts:39,83`). `UpdateService.Restart()` uses the same installed-copy check as `Removable()` (§3.11).
+- **Dev:** checks and downloads, but can't install, because it isn't an installed copy (`AppUpdater.ts:39,83`). `UpdateService.Install()` uses the same installed-copy check as `Removable()` (§3.11).
 - **Canary:** never self-updates. A canary build doesn't set up `app.Updater` at all, and `Check` answers "no update" as `AppUpdater.ts:39` does today, so the banner never shows. Canary isn't packaged for now (§5). Today it never reaches the releases page (`build-windows.yml:101-104`), so it can't take stable's release feed.
 
 **What changes.**
-- **Releases** publish the bare app exe plus `SHA256SUMS`, next to the NSIS installer for first installs. The GitHub provider reads only `ChecksumAsset`, not GitHub's per-asset `digest` (`wails:v3/pkg/updater/providers/github/github.go:167-178`).
+- **Releases** publish only the NSIS installer plus `SHA256SUMS`. The GitHub provider reads only `ChecksumAsset`, not GitHub's per-asset `digest` (`wails:v3/pkg/updater/providers/github/github.go:167-178`).
 - **Frontend:** keeps `AppUpdateBanner` and `AppUpdateService` with its own phases. It listens to three of the updater's events while downloading: `wails:updater:download-progress` (`written`/`total`), `update-ready`, and `error` except at the `check` stage, since a failed check means no banner. A failed download shows the updater's own message (for example `updater: digest mismatch`).
 - **`internal/update`** wraps `app.Updater` (`update_test.go` runs it against a fake GitHub):
   - `Configure` sets up the GitHub provider; its `HTTPClient` sends each request through `netx.For(proxy)`'s stream transport, so a proxy change applies to the next request and a release asset keeps its `Content-Length`.
   - `Check` reports the newer version; any failure reads as no update, as `AppUpdater.ts:38-49` does.
   - `Download` refuses with "There is no update to download." before a successful `Check` and "The update is already downloading." during one. It runs `DownloadAndInstall` in the background under a `busy.AppDownload` token.
-  - `Install` checks `busy.QuitBlocker()` first, as `thenQuit` does today, then that the staged file still exists (`downloadMissing` in the error's JSON otherwise), then the installed-copy check (`uninstall.InstallDir`), then calls `Restart`.
+  - `Install` checks `busy.QuitBlocker()` first, as `thenQuit` does today, then that the staged file still exists (`downloadMissing` in the error's JSON otherwise), then the installed-copy check (`uninstall.InstallDir`), then starts the update helper and quits.
 - **Deleted:** `AppUpdater.ts`, `download.ts` (`BinaryManager` keeps a small download helper), `appRelease.ts`, the PowerShell worker and the WinForms window.
 - **No signing for now:** §5.
 
@@ -575,8 +578,8 @@ Evidence (`port-sandbox/gotests/datadirs/datadirs_test.go`, with real HKCU keys 
 
 **In-app uninstall:**
 - **`Removable()`:** reads `UninstallString` from this channel's HKCU key (`golang.org/x/sys/windows/registry`) and checks the running exe is inside that directory. Dev builds fail the check, as today.
-- **`Start()`:** copies the exe to `%TEMP%` and launches it in an uninstall helper mode (`--uninstall-helper <pid> <installdir>`, dispatched before `application.New`). The helper waits for the PID, then runs `uninstall.exe /S`, which removes the data through `--remove-data`. Shortcuts are the NSIS uninstaller's job. The helper copy stays in `%TEMP%`: a running exe can't delete itself, and a per-user process can't schedule a delete for the next reboot.
-- **Tests** (`internal/uninstall/uninstall_test.go`): `InstallDir` against a throwaway HKCU key; the helper waits for a live PID before running a fake `uninstall.exe /S`; a detached spawn runs.
+- **`Start()`:** copies the exe to `%TEMP%` and launches it in an uninstall helper mode (`--uninstall-helper <pid> <installdir>`, dispatched before `application.New`) through `platform.HandOff`. The helper waits up to 2 minutes for the PID and does nothing if the app is still running. Otherwise it runs `uninstall.exe /S`, which removes the data through `--remove-data`. Shortcuts are the NSIS uninstaller's job. The helper copy stays in `%TEMP%`: a running exe can't delete itself, and a per-user process can't schedule a delete for the next reboot.
+- **Tests** (`internal/uninstall/uninstall_test.go`): `InstallDir` against a throwaway HKCU key; the helper waits for a live PID before running a fake `uninstall.exe /S`; a detached spawn runs (`internal/platform/process_test.go`).
 - **Job objects, measured** (`port-sandbox/app/probe.go` `jobInfo`):
   - launched from Explorer (a `.lnk` opened through `explorer.exe`), the app **is in a job**, without kill-on-close and with breakaway allowed;
   - launched by a parent with a kill-on-close job (the test harness), it is in a kill-on-close job.
@@ -598,7 +601,7 @@ A direct port, except for where the binaries live.
 - **Unzip** with `archive/zip` instead of `System32\tar` (`:263-277`).
 - **Replacing files:** `os.Rename` replaces an existing file on Windows (`winproc_test.go`, `TestRenameReplaces`), so `rm` before rename (`:281-283`, `:325`) goes. A **running** exe can be neither replaced nor deleted: both failed with "Access is denied" (`datadirs/binlock_test.go`, `TestRunningExeCannotBeReplaced`).
 - **Cross-process lock:** `busy.Install` only excludes the app's own spawns, but two channels (a dev build and stable, later canary) can run at once on the same `bin\`. So `LockBin` (`port-sandbox/gotests/datadirs/binlock.go`) takes `LockFileEx` on `bin\.lock`:
-  - every spawn of a managed binary (yt-dlp search or import, ffprobe/ffmpeg in `Stage`) holds it **shared** while the process runs;
+  - every spawn of a managed binary (yt-dlp's SoundCloud search or an import, ffprobe/ffmpeg in `Stage`) holds it **shared** while the process runs;
   - installs and the yt-dlp update hold it **exclusive**;
   - the startup install waits for the lock;
   - a user action fails fast with `ErrBinBusy` ("another VexWave window is using or updating the tools").
@@ -612,14 +615,17 @@ A direct port, except for where the binaries live.
 
 ### 3.14 Backend client and limits — **med**
 
-- **Client:** hand-written `backend.Client` with a `Do(ctx, method, path, body, out)` core and 13 thin methods. Path builders mirror `trackAudioPath`/`*ImagePath` (`contract.ts:397-416`), and edit requests use `Nullable[T]` + `omitzero` (§3.3).
-- **Why not generate it:** `@ts-rest/open-api` peers `zod ^3` in every published version, up to `3.53.0-rc.1`. This repo is on zod 4 and `@ts-rest/core 3.53.0-rc.1` (`package.json:31,40`), checked on the npm registry.
+- **Client:** `backend.Client` with a `do(ctx, method, path, body, out)` core and 12 thin hand-written methods, which keep the user-facing error texts. Path builders for the binary routes mirror `trackAudioPath`/`*ImagePath` (`contract.ts:397-416`).
+- **Generated types and routes:** `contract/gen.ts` (bun) writes `internal/backend/contract_gen.go` from the JSON routes of `ApiContract`: one struct per request and response schema (exported names minus `Request`/`Response`) and a typed `route[Body, Resp]` per route, with its payload kind from `metadata.body`. The methods go through the generic `call` (a transport error becomes a "server unreachable" `Failure`) or `send` (it stays raw, for `Login`, whose caller describes it with the proxy in mind; `Probe` stays raw too and skips decoding the library), so a contract change breaks `go build` at the call site, and CI fails when the file drifts.
+  - **Mapping:** request schemas use `z.toJSONSchema`'s `io: "input"` (base64 stays a string), responses `io: "output"`. Optional fields get `omitzero`, so a nil slice stays out and `[]` is sent. Optional nullable fields become `Nullable[T]` (§3.3). Any other shape makes the generator throw, as do path and query parameters and any header besides `authorization` on a JSON route; only routes whose 200 is an `otherResponse` are skipped.
+  - **Not generated:** `PostTrack` streams its body (§3.2) and takes the route's method and path only. `.refine` checks don't survive JSON Schema; `TestContract` still runs every recorded request through `contract/check.ts`.
+  - **Why not `@ts-rest/open-api`:** it peers `zod ^3` in every published version, up to `3.53.0-rc.1`. This repo is on zod 4 and `@ts-rest/core 3.53.0-rc.1` (`package.json:31,40`), checked on the npm registry.
 - **Errors:**
   - certificate failures classified with `errors.As` (§2);
   - a proxy 407 on an HTTPS target surfaces as a transport error whose text is only `Proxy Authentication Required` (`TestProxy407`). Return a typed error from `Transport.OnProxyConnectResponse` instead (`TestProxy407Typed`);
   - an HTTP target still gets a plain 407 response;
   - `Retry-After` also accepts the HTTP-date form via `http.ParseTime` (`TestRetryAfterDate`); today only seconds are read (`ApiClient.ts:464-467`).
-- **Limits:** only `MAX_IMAGE_BASE64` and `MAX_AUDIO_BASE64` are exported (`contract.ts:18-19`); the rest live inside schemas. `z.toJSONSchema` (built into zod 4) gave all eight values: `maxLength`, `maximum` and `maxItems` (`port-sandbox/limits/gen.ts`). `contract/gen-limits.ts` (bun) writes `internal/backend/limits_gen.go` and `frontend/src/lib/limits.gen.ts`, and CI fails when either drifts. That replaces the startup `throw` (`ApiClient.ts:39-46`) and the hand mirror in `src/shared/limits.ts`. The frontend still needs the values for its image pre-checks.
+- **Limits:** only `MAX_IMAGE_BASE64` and `MAX_AUDIO_BASE64` are exported (`contract.ts:18-19`); the rest live inside schemas. `z.toJSONSchema` (built into zod 4) gave all eight values: `maxLength`, `maximum` and `maxItems` (`port-sandbox/limits/gen.ts`). `contract/gen.ts` reads them from the same JSON Schemas it builds the structs from, and writes them into `contract_gen.go` and `frontend/src/lib/limits.gen.ts`. CI fails when either drifts. That replaces the startup `throw` (`ApiClient.ts:39-46`) and the hand mirror in `src/shared/limits.ts`. The frontend still needs the values for its image pre-checks.
 
 ---
 
@@ -671,6 +677,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 - **`components/AddTracksButton.tsx:16-18`**: `<input type="file">` → `Uploads.Pick()`.
 - **`components/UploadReviewDialog.tsx:82`**: the staged cover comes from a loopback URL instead of `URL.createObjectURL(coverBlob)`. The replacement-cover picker (`:170-172`) stays a browser `File`.
 - **`App.tsx:44-50,67-74,110`**: the drop handlers and the `isDragging` overlay are deleted (§5).
+- **`index.css`**: `body` takes `select-none`, so text in the `role="button"` rows and cards can't be selected and doesn't show an I-beam cursor. Inputs stay selectable.
 - **`lib/devicePixelRatio.ts:1-5,22`**: the CEF `resize` trigger can go.
 - **Types:** the data types of `src/shared/rpcSchema.ts` move to `api/types.ts` as the frontend's hand-written types (§3.3). Its `PlayerRPC` schema (`:260-315`) is replaced by the `Backend` interface in `api/rpc.ts`, and its result envelopes and tagged messages by plain return values and per-event payloads.
 - **Imports of `src/shared/`:** the 34 `../../shared/rpcSchema` and 7 `../../shared/limits` imports become `@/api/types` and `@/lib/limits`.
@@ -692,6 +699,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
   - the relaunch logic in `AppUpdater.ts:145-194`, the install roots in `detachedHelper.ts:27-38`, and `scripts/fuse-installer.ts`: not ported;
   - nothing reads `%LOCALAPPDATA%\app.vexwave\<channel>`, `%LOCALAPPDATA%\VexWave` or the CEF profile.
 - **Consequences the port must handle:**
+  - **v1.0.0, the first Wails release, takes only a bare exe:** its default matcher skips `*-installer.*`, so once releases are installer-only it reports no update. Decision: those users download the installer by hand once; the first installer-only release's notes say so.
   - **Old clients still poll GitHub** for an asset named exactly `VexWave-Setup.exe` (`appRelease.ts:4,48-51`), and run it hidden **without `/S`** (`AppUpdater.ts:159`). Wails releases must not use that asset name: then `pickInstaller` returns `null`, and old clients report "no update" instead of starting an invisible NSIS installer.
   - **The old and new apps don't touch each other's files**, so users can install and uninstall them in any order:
     - the old uninstaller deletes its install tree `%LOCALAPPDATA%\app.vexwave`, the bin dir's parent `%LOCALAPPDATA%\VexWave` (`Uninstaller.ts:41`) and its own Uninstall key `app.vexwave` (`:75`);
@@ -711,7 +719,7 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
   - One `project.nsi` must produce both products. The generated `create:nsis:installer` task passes no channel option to `makensis`: only the install scope and the binary path (`port-sandbox/app/build/windows/Taskfile.yml:128`). So the channel's names need a `-D` define added there, or a separate script.
   - `wails_tools.nsh` sets `UNINST_KEY_NAME` only when it's undefined, so `project.nsi` or a `-D` define can set it per channel.
   - Canary's key name is in `buildinfo` from the start, because every stable build that can share `VexWaveData` with a canary install must check it. Without it, uninstalling stable would take `bin\` and the root from under an installed canary.
-  - `build-windows.yml` gets its manual canary run back, publishing a CI artifact rather than a release (`build-windows.yml:101-104`).
+  - `build.yml` gets its manual canary run back, publishing a CI artifact rather than a release (`build-windows.yml:101-104`).
   - §7's NSIS check then repeats for both channels side by side.
 
 **Drag & drop of files onto the window.**
@@ -741,14 +749,14 @@ The UI is copied from `src/mainview/` to `frontend/src/` (Port setup). Paths bel
 ## 6. Proposed Go structure (sketch)
 
 ```
-main.go                        // embed frontend/dist, mode dispatch before application.New (--uninstall-helper, --remove-data), window, wiring
+main.go                        // embed frontend/dist, mode dispatch before application.New (--update-helper, --uninstall-helper, --remove-data), window, wiring
 internal/
   buildinfo/                   // Channel (build tag), Version (the exe's version resource), the channels' UNINST_KEY_NAMEs
   datadirs/                    // Layout (%LOCALAPPDATA%\VexWaveData\{bin, <channel>\webview, <channel>\imports}), RemoveData rule, LockBin (bin\.lock)
-  platform/                    // Command(): CREATE_NO_WINDOW + HideWindow, PATH appended last
+  platform/                    // Command(): CREATE_NO_WINDOW + HideWindow, PATH appended last; HandOff, CopyFile, SpawnDetached, WaitExit, HelperCopies for the helper modes
   netx/                        // For(proxy): cached API + stream clients; httpproxy ProxyFunc; OnProxyConnectResponse → ProxyAuthError; Unreachable text
   busy/                        // Registry: Acquire(Kind) (release, error), QuitBlocker()
-  backend/                     // Client (13 methods), Failure error, Nullable[T], path builders, limits_gen.go
+  backend/                     // Client (12 methods), Failure error, Nullable[T], path builders, contract_gen.go (generated types, routes, limits)
   session/                     // SessionService (bound): Restore, Login, Logout, SetProxy; Store = atomic.Pointer[Session] + CAS
   media/                       // loopback Server; download (shared, progressive reader); Cache (LRU); image + staged-cover routes
   library/                     // LibraryService (bound): GetLibrary, Edit/Delete Track, Artist/Playlist CRUD
@@ -757,9 +765,9 @@ internal/
   binaries/                    // BinaryService (bound) + Manager
   ytdlp/                       // Command (base args, proxy env), Lines, Tail + Failure (last ERROR: line); ytdlptest builds a fake yt-dlp.exe
   importer/                    // ImportService (bound): Start, Discard; worker goroutine; avatar
-  search/                      // SearchService (bound): Search; rank.go (pure, cases.Fold) + rank_test.go + testdata/{pages,ranked}.json
+  search/                      // SearchService (bound): Search; ytmusic.go (YouTube Music Songs search); soundcloud.go (yt-dlp scsearch, reranked); rank.go (pure, cases.Fold, SoundCloud only) + rank_test.go + testdata/{pages,ranked,music-search}.json
   presence/                    // PresenceService (bound): SetEnabled, SetNowPlaying; actor; pipe via go-winio (§3.7)
-  update/                      // UpdateService (bound): app.Updater + GitHub provider (ChecksumAsset, HTTPClient from netx)
+  update/                      // UpdateService (bound): app.Updater + GitHub provider (installer AssetMatcher, ChecksumAsset, HTTPClient from netx); the --update-helper mode
   uninstall/                   // UninstallService (bound): Removable, Start; the --uninstall-helper and --remove-data modes; InstallDir, which the updater's installed-copy check shares
   events/                      // RegisterEvent[...] calls + payload structs (the import:* events live in importer: their payload carries upload.Staged, and upload → session → events would be a cycle)
 ```
@@ -795,7 +803,7 @@ The frontend (`frontend/`), the contract tooling (`contract/`) and the build ass
 | `platform` | `port-sandbox/gotests/winproc` | `winproc_test.go`, `env_test.go`, `ytdlp_test.go` |
 | `update` | `port-sandbox/gotests/updatertest` | `update_test.go`, through `UpdateService` against the fake GitHub; the sandbox's `PublicKey` case stays there, as no key is configured (§5) |
 | `backend.Nullable`, error shape | `port-sandbox/app/probe.go` | the `port-sandbox/cdp/probe-bridge.ts` checks |
-| `contract/gen-limits.ts` | `port-sandbox/limits/gen.ts` | CI drift check for both generated files |
+| `contract/gen.ts` | `port-sandbox/limits/gen.ts` | CI drift check for both generated files |
 
 ---
 
@@ -816,4 +824,3 @@ Every claim in this report that is not yet proven is listed here. Other sections
 ## 8. Open questions
 
 1. **Renderer crash seen once (watch item).** The first version of `port-sandbox/cdp/probe-audio.ts` crashed the WebView2 renderer three runs in a row. It crashed in the step that starts playback, `/head` decoding and a Web Audio graph together. Nine isolated and combined variants (`port-sandbox/cdp/probe-crash.ts`, `probe-crash2.ts`) and the final probe never crashed. A manual try on the port didn't reproduce it either. Whether it can happen in the app is open; the manual check in §7 is how the first phase watches for it.
-2. **Search ranking quality.** The user reports that today's ranking often misses the result they wanted. The port keeps it as is (§3.5), so `ranked.json` guards against accidental change, not for quality. Reworking it is a separate task; `go test -update` rewrites the golden file when the ranking changes on purpose.

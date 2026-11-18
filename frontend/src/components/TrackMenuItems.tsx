@@ -119,10 +119,7 @@ export function TrackDownloadItem({ track }: { track: Track }) {
 
 export function TrackDeleteItem({ onSelect }: { onSelect: () => void }) {
 	return (
-		<ContextMenuItem
-			className="text-destructive focus:text-destructive"
-			onSelect={onSelect}
-		>
+		<ContextMenuItem variant="destructive" onSelect={onSelect}>
 			<Trash2 className="h-4 w-4" />
 			Delete from server
 		</ContextMenuItem>

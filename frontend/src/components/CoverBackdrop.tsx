@@ -96,7 +96,7 @@ export const CoverBackdrop = memo(function CoverBackdrop({
 					</div>
 				))}
 			</div>
-			<div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/70 to-background/75" />
+			<div className="absolute inset-0 bg-linear-to-t from-background/85 via-background/70 to-background/75" />
 		</div>
 	);
 });

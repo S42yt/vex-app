@@ -1,12 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
-import { Loader2, Music, Search } from "lucide-react";
+import { Compass, Loader2, Music, Search } from "lucide-react";
 import { LIBRARY_QUEUE_CONTEXT, libraryService } from "@/api/LibraryService";
 import { navigationService } from "@/api/NavigationService";
 import { EmptyState } from "@/components/EmptyState";
 import { LibraryTrackRow } from "@/components/LibraryTrackRow";
 import { PendingImportRow, PendingUploadRow } from "@/components/PendingRows";
 import { SearchInput } from "@/components/SearchInput";
-import { SECTIONS } from "@/components/Sections";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -103,10 +102,10 @@ export function TrackList() {
 						<Button
 							variant="secondary"
 							size="sm"
-							onClick={() => navigationService.showSection("discover")}
+							onClick={() => navigationService.show("discover")}
 						>
-							<SECTIONS.discover.Icon className="h-4 w-4" />
-							{SECTIONS.discover.label}
+							<Compass className="h-4 w-4" />
+							Discover
 						</Button>
 					}
 				/>

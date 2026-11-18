@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import * as SliderPrimitive from "@radix-ui/react-slider";
+import { Slider as SliderPrimitive } from "radix-ui";
 import { Group, Toggle } from "@/components/SettingsControls";
 import { Button } from "@/components/ui/button";
 import { SliderThumb } from "@/components/ui/slider";

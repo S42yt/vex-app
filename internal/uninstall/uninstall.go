@@ -2,12 +2,10 @@ package uninstall
 
 import (
 	"errors"
-	"time"
 
 	"github.com/VexWave/vex-app/internal/busy"
+	"github.com/VexWave/vex-app/internal/platform"
 )
-
-const quitDelay = 500 * time.Millisecond
 
 type UninstallService struct {
 	Busy *busy.Registry
@@ -31,9 +29,8 @@ func (s *UninstallService) Start() error {
 	if !ok {
 		return errors.New("VexWave can only uninstall an installed copy of itself, and this one is running from a development build.")
 	}
-	if err := launchHelper(dir); err != nil {
+	if err := platform.HandOff("--uninstall-helper", s.Quit, dir); err != nil {
 		return errors.New("The uninstaller couldn't start, so nothing was removed.")
 	}
-	time.AfterFunc(quitDelay, s.Quit)
 	return nil
 }

@@ -15,7 +15,7 @@ export function PendingUploadRow({ upload }: { upload: UploadItem }) {
 	return (
 		<div className="flex w-full items-center gap-3 rounded-lg py-2 pl-3 pr-2.5 text-left opacity-80">
 			<span className="w-5 shrink-0" aria-hidden="true" />
-			<div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm ring-1 ring-inset ring-border/60">
+			<div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-xs ring-1 ring-inset ring-border/60">
 				<Music className="absolute inset-0 m-auto h-5 w-5 text-muted-foreground" />
 			</div>
 			<div className="min-w-0 flex-1">
@@ -55,7 +55,7 @@ export function PendingImportRow({ job }: { job: ImportJob }) {
 	return (
 		<div className="flex w-full items-center gap-3 rounded-lg py-2 pl-3 pr-2.5 text-left opacity-80">
 			<span className="w-5 shrink-0" aria-hidden="true" />
-			<div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm ring-1 ring-inset ring-border/60">
+			<div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-xs ring-1 ring-inset ring-border/60">
 				<Link2 className="absolute inset-0 m-auto h-5 w-5 text-muted-foreground" />
 			</div>
 			<div className="min-w-0 flex-1">

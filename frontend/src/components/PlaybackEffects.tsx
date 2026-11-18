@@ -1,6 +1,6 @@
 import { memo, useId, type ReactNode } from "react";
 import { Gauge, RotateCcw } from "lucide-react";
-import { modeToggle } from "@/components/playerBarChrome";
+import { modeToggle } from "@/components/ghostChrome";
 import { Toggle, type Labelling } from "@/components/SettingsControls";
 import { Button } from "@/components/ui/button";
 import {

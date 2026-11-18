@@ -26,11 +26,11 @@ export function CollectionHeader({
 	actions?: ReactNode;
 }) {
 	return (
-		<div className="flex flex-col gap-1.5 border-b bg-gradient-to-b from-accent/50 via-accent/10 to-transparent px-4 pb-3.5 pt-2.5">
+		<div className="flex flex-col gap-1.5 border-b bg-linear-to-b from-accent/50 via-accent/10 to-transparent px-4 pb-3.5 pt-2.5">
 			<button
 				type="button"
 				onClick={onBack}
-				className="-ml-1.5 flex w-fit items-center gap-0.5 rounded-md py-0.5 pl-0.5 pr-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+				className="-ml-1.5 flex w-fit items-center gap-0.5 rounded-md py-0.5 pl-0.5 pr-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
 			>
 				<ChevronLeft className="h-3.5 w-3.5" />
 				{parentLabel}
@@ -50,7 +50,7 @@ export function CollectionHeader({
 					{actions}
 					<Button
 						size="sm"
-						className="rounded-full px-4"
+						className="rounded-full has-[>svg]:px-4"
 						disabled={playDisabled}
 						aria-label={playLabel}
 						onClick={onPlay}

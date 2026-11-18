@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"errors"
-	"net/http"
 	"time"
 
 	"github.com/VexWave/vex-app/internal/backend"
@@ -36,7 +35,7 @@ const probeTimeout = 30 * time.Second
 func (s *SessionService) Login(ctx context.Context, p LoginParams) (string, error) {
 	s.Store.Logout()
 	c := &backend.Client{BaseURL: p.BaseURL, HTTP: netx.For(p.ProxyURL).API}
-	token, err := c.Login(ctx, p.Username, p.Password)
+	token, err := c.Login(ctx, backend.Login{Username: p.Username, Password: p.Password})
 	if err != nil {
 		return "", describe(err, p.BaseURL, p.ProxyURL)
 	}
@@ -55,7 +54,7 @@ func (s *SessionService) SetProxy(ctx context.Context, p ProxyParams) error {
 	err := s.Store.SetProxy(ctx, p.ProxyURL, func(ctx context.Context, next Session) error {
 		ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 		defer cancel()
-		err := next.client().Do(ctx, http.MethodGet, "/data", nil, nil, "Checking the proxy failed", backend.NoPayload)
+		err := next.client().Probe(ctx)
 		return describe(err, next.BaseURL, next.Proxy)
 	})
 	if unauthorized(err) && cur != nil {

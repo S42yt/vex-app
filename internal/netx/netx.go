@@ -38,11 +38,12 @@ func For(proxy string) *Clients {
 func transport(proxy string, noGzip bool) *http.Transport {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.DisableCompression = noGzip
-	t.Proxy = nil
+	cfg := httpproxy.FromEnvironment()
 	if proxy != "" {
-		fn := (&httpproxy.Config{HTTPProxy: proxy, HTTPSProxy: proxy, NoProxy: noProxy()}).ProxyFunc()
-		t.Proxy = func(r *http.Request) (*url.URL, error) { return fn(r.URL) }
+		cfg.HTTPProxy, cfg.HTTPSProxy = proxy, proxy
 	}
+	fn := cfg.ProxyFunc()
+	t.Proxy = func(r *http.Request) (*url.URL, error) { return fn(r.URL) }
 	t.OnProxyConnectResponse = func(_ context.Context, _ *url.URL, _ *http.Request, res *http.Response) error {
 		if res.StatusCode == http.StatusProxyAuthRequired {
 			return &ProxyAuthError{}
@@ -51,8 +52,6 @@ func transport(proxy string, noGzip bool) *http.Transport {
 	}
 	return t
 }
-
-func noProxy() string { return httpproxy.FromEnvironment().NoProxy }
 
 func CertRejected(err error) bool {
 	var cve *tls.CertificateVerificationError

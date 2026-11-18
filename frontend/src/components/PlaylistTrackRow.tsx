@@ -85,7 +85,7 @@ export const PlaylistTrackRow = memo(function PlaylistTrackRow({
 						type="button"
 						aria-label={`Reorder ${track.title}`}
 						className={cn(
-							"-mr-1.5 flex h-7 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+							"-mr-1.5 flex h-7 w-5 shrink-0 touch-none cursor-grab items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring",
 							isDragging && "cursor-grabbing text-foreground",
 						)}
 						onClick={(e) => e.stopPropagation()}

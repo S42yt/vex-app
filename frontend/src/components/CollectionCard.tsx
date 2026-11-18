@@ -78,7 +78,7 @@ export function CollectionCard({
 					onOpen();
 				}
 			}}
-			className="group relative flex cursor-pointer flex-col gap-2 rounded-xl p-3 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+			className="group relative flex flex-col gap-2 rounded-xl p-3 transition-colors hover:bg-accent focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
 		>
 			<div className="relative">
 				{artwork}
@@ -116,7 +116,7 @@ export function CollectionCard({
 				<p className="truncate text-xs text-muted-foreground">{meta}</p>
 			</div>
 			{actions && (
-				<div className="absolute right-1 top-1 flex rounded-md bg-background/70 opacity-0 backdrop-blur-sm transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+				<div className="absolute right-1 top-1 flex rounded-md bg-background/70 opacity-0 backdrop-blur-xs transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 					{actions}
 				</div>
 			)}

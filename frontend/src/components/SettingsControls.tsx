@@ -101,10 +101,10 @@ export function Toggle({
 			aria-checked={checked}
 			onClick={() => onChange(!checked)}
 			className={cn(
-				"relative h-6 w-11 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+				"relative h-6 w-11 rounded-full transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring",
 				checked
 					? "bg-primary"
-					: "bg-black/30 shadow-[inset_0_1px_2px_rgb(0_0_0/0.55)] ring-1 ring-inset ring-foreground/[0.06]",
+					: "bg-black/30 shadow-[inset_0_1px_2px_rgb(0_0_0/0.55)] ring-1 ring-inset ring-foreground/6",
 			)}
 			{...labelling}
 		>
@@ -114,7 +114,7 @@ export function Toggle({
 					"absolute left-0 top-1/2 block h-5 w-5 -translate-y-1/2 rounded-full shadow-lg shadow-black/50 ring-1 ring-inset transition-transform duration-200 ease-out motion-reduce:transition-none",
 					checked
 						? "translate-x-[22px] bg-background ring-black/10"
-						: "translate-x-0.5 bg-gradient-to-b from-muted to-muted/60 ring-foreground/15",
+						: "translate-x-0.5 bg-linear-to-b from-muted to-muted/60 ring-foreground/15",
 				)}
 			/>
 		</button>

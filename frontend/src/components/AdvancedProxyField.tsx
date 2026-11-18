@@ -19,7 +19,7 @@ export function AdvancedProxyField({
 
 	return (
 		<details open={initiallyOpen} className="group">
-			<summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+			<summary className="flex w-fit list-none items-center gap-1 rounded-sm text-sm text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring">
 				<ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
 				Advanced
 			</summary>

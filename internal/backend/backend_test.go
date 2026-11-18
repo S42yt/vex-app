@@ -42,7 +42,7 @@ func TestFailures(t *testing.T) {
 		{"407", 407, nil, "", NoPayload, Failure{Status: 407, Message: "The proxy rejected its credentials."}},
 	}
 	for _, c := range cases {
-		err := answer(c.status, c.h, c.body).call(context.Background(), "Editing the track", "POST", "/editTrack", map[string]string{}, nil, c.payload)
+		err := answer(c.status, c.h, c.body).do(context.Background(), "POST", "/editTrack", nil, nil, "Editing the track", c.payload)
 		var f *Failure
 		if !errors.As(err, &f) || *f != c.want {
 			t.Errorf("%s: got %#v", c.name, err)
@@ -52,7 +52,7 @@ func TestFailures(t *testing.T) {
 
 func TestUnreachable(t *testing.T) {
 	c := &Client{BaseURL: "http://127.0.0.1:1", HTTP: http.DefaultClient}
-	err := c.DeleteTrack(context.Background(), "x")
+	err := c.DeleteTrack(context.Background(), DeleteTrack{ID: "x"})
 	var f *Failure
 	if !errors.As(err, &f) || f.Message != "Deleting the track failed — server unreachable" {
 		t.Fatalf("%#v", err)
@@ -110,27 +110,27 @@ func TestContract(t *testing.T) {
 	const track = "0190a6e2-7b1c-7d3e-8f4a-5b6c7d8e9f01"
 	artists, tracks, none := []int32{1, 2}, []string{track}, []string{}
 	set, null := Nullable[string]{Set: true, V: "AQID"}, Nullable[string]{Set: true, Null: true}
-	_, loginErr := c.Login(ctx, "user", "pass")
+	_, loginErr := c.Login(ctx, Login{Username: "user", Password: "pass"})
 	_, dataErr := c.Data(ctx)
 	for i, err := range []error{
 		loginErr,
 		dataErr,
 		c.EditTrack(ctx, EditTrack{ID: track}),
-		c.EditTrack(ctx, EditTrack{ID: track, Title: "T", ArtistIDs: &artists, Cover: set}),
-		c.EditTrack(ctx, EditTrack{ID: track, ArtistIDs: &[]int32{}, Cover: null}),
-		c.DeleteTrack(ctx, track),
-		c.PostArtist(ctx, PostArtist{Name: "A"}),
-		c.PostArtist(ctx, PostArtist{Name: "A", Image: "AQID"}),
+		c.EditTrack(ctx, EditTrack{ID: track, Title: "T", ArtistIDs: artists, Cover: set}),
+		c.EditTrack(ctx, EditTrack{ID: track, ArtistIDs: []int32{}, Cover: null}),
+		c.DeleteTrack(ctx, DeleteTrack{ID: track}),
+		c.PostArtist(ctx, CreateArtist{Name: "A"}),
+		c.PostArtist(ctx, CreateArtist{Name: "A", Image: "AQID"}),
 		c.EditArtist(ctx, EditArtist{ID: 1}),
 		c.EditArtist(ctx, EditArtist{ID: 1, Name: "A", Image: set}),
 		c.EditArtist(ctx, EditArtist{ID: 1, Image: null}),
-		c.DeleteArtist(ctx, 1),
-		c.PostPlaylist(ctx, PostPlaylist{Name: "P"}),
-		c.PostPlaylist(ctx, PostPlaylist{Name: "P", TrackIDs: tracks, Image: "AQID"}),
+		c.DeleteArtist(ctx, DeleteByID{ID: 1}),
+		c.PostPlaylist(ctx, CreatePlaylist{Name: "P"}),
+		c.PostPlaylist(ctx, CreatePlaylist{Name: "P", TrackIDs: tracks, Image: "AQID"}),
 		c.EditPlaylist(ctx, EditPlaylist{ID: 1}),
-		c.EditPlaylist(ctx, EditPlaylist{ID: 1, Name: "P", TrackIDs: &tracks, Image: set}),
-		c.EditPlaylist(ctx, EditPlaylist{ID: 1, TrackIDs: &none, Image: null}),
-		c.DeletePlaylist(ctx, 1),
+		c.EditPlaylist(ctx, EditPlaylist{ID: 1, Name: "P", TrackIDs: tracks, Image: set}),
+		c.EditPlaylist(ctx, EditPlaylist{ID: 1, TrackIDs: none, Image: null}),
+		c.DeletePlaylist(ctx, DeleteByID{ID: 1}),
 	} {
 		if err != nil {
 			t.Fatalf("call %d: %v", i, err)

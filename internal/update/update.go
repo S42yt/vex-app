@@ -10,12 +10,16 @@ import (
 
 	"github.com/VexWave/vex-app/internal/busy"
 	"github.com/VexWave/vex-app/internal/netx"
+	"github.com/VexWave/vex-app/internal/platform"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 )
 
-const repository = "VexWave/vex-app"
+const (
+	repository     = "VexWave/vex-app"
+	installerAsset = "VexWave-installer.exe"
+)
 
 func Configure(u *updater.Updater, version string, proxy func() string) error {
 	return configure(u, version, github.Config{
@@ -26,11 +30,21 @@ func Configure(u *updater.Updater, version string, proxy func() string) error {
 }
 
 func configure(u *updater.Updater, version string, gc github.Config) error {
+	gc.AssetMatcher = pickInstaller
 	gh, err := github.New(gc)
 	if err != nil {
 		return err
 	}
 	return u.Init(updater.Config{CurrentVersion: version, Providers: []updater.Provider{gh}, Window: updater.WindowNone})
+}
+
+func pickInstaller(_ updater.CheckRequest, assets []github.ReleaseAsset) int {
+	for i, a := range assets {
+		if a.Name == installerAsset {
+			return i
+		}
+	}
+	return -1
 }
 
 type proxied func() string
@@ -40,14 +54,16 @@ func (p proxied) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 type UpdateService struct {
-	Updater   *updater.Updater
-	Busy      *busy.Registry
-	Installed func() bool
+	Updater    *updater.Updater
+	Busy       *busy.Registry
+	InstallDir func() (string, bool)
+	Quit       func()
 
 	ctx         context.Context
 	mu          sync.Mutex
 	latest      string
 	downloading bool
+	handedOff   bool
 }
 
 func (s *UpdateService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
@@ -58,12 +74,11 @@ func (s *UpdateService) ServiceStartup(ctx context.Context, _ application.Servic
 	return nil
 }
 
-// Wails' updater clears a staged download only on the next download, and leaves the swapped-out exe
-// renamed aside. SingleInstance has exited a second launch before this runs.
+// Wails' updater clears a staged download only on the next download. SingleInstance has exited a
+// second launch before this runs.
 func sweep(exe string) {
 	stale, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "wails-update-*"))
-	olds, _ := filepath.Glob(exe + ".old.*")
-	for _, p := range append(stale, olds...) {
+	for _, p := range append(stale, platform.HelperCopies()...) {
 		os.RemoveAll(p)
 	}
 }
@@ -128,11 +143,21 @@ func (s *UpdateService) Install(ctx context.Context) error {
 	if _, err := os.Stat(path); path == "" || err != nil {
 		return &Refusal{Message: "The downloaded update is gone — download it again.", DownloadMissing: true}
 	}
-	if !s.Installed() {
+	if _, ok := s.InstallDir(); !ok {
 		return &Refusal{Message: "Only an installed copy of VexWave can update itself."}
 	}
-	if err := s.Updater.Restart(ctx); err != nil {
+	exe, err := os.Executable()
+	if err != nil {
 		return &Refusal{Message: "The update couldn't start: " + err.Error()}
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.handedOff {
+		return &Refusal{Message: "The update is already installing."}
+	}
+	if err := platform.HandOff("--update-helper", s.Quit, path, exe); err != nil {
+		return &Refusal{Message: "The update couldn't start: " + err.Error()}
+	}
+	s.handedOff = true
 	return nil
 }

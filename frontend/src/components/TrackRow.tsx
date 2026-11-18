@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { EllipsisVertical } from "lucide-react";
 import { NowPlayingBars } from "@/components/NowPlayingBars";
 import { TrackArtwork } from "@/components/TrackArtwork";
+import { GHOST_TINT } from "@/components/ghostChrome";
 import { Button } from "@/components/ui/button";
 import {
 	ContextMenu,
@@ -46,7 +47,7 @@ export function TrackRow({
 						}
 					}}
 					className={cn(
-						"group relative flex w-full cursor-pointer items-center gap-3 rounded-lg py-2 pr-2.5 text-left transition-colors",
+						"group relative flex w-full items-center gap-3 rounded-lg py-2 pr-2.5 text-left transition-colors",
 						dragHandle ? "pl-1.5" : "pl-3",
 						isCurrent ? "bg-accent" : "hover:bg-accent/60",
 					)}
@@ -88,7 +89,10 @@ export function TrackRow({
 					<Button
 						variant="ghost"
 						size="icon"
-						className="h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:bg-foreground/10 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+						className={cn(
+							"h-7 w-7 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100",
+							GHOST_TINT,
+						)}
 						aria-label={`More options for ${track.title}`}
 						onClick={(e) => {
 							e.stopPropagation();

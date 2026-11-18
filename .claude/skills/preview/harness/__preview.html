@@ -15,10 +15,10 @@
       body {
         font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
       }
-      /* The window: the app's 1200x760 client area under a Windows title bar.
-         Changing either number means changing WINDOW in render.ts. */
+      /* The window: the app's client area under a Windows title bar, filling
+         whatever window render.ts gives Edge (WINDOW, divided by --zoom). */
       .window {
-        width: 1200px;
+        width: 100vw;
         border-radius: 8px;
         overflow: hidden;
       }
@@ -60,8 +60,8 @@
          framed at all rather than taking the whole page. */
       iframe {
         display: block;
-        width: 1200px;
-        height: 760px;
+        width: 100%;
+        height: calc(100vh - 32px);
         border: 0;
       }
     </style>

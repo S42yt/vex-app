@@ -81,7 +81,7 @@ export function LoginScreen() {
 	return (
 		<div className="flex h-screen items-center justify-center bg-background p-4 text-foreground">
 			<Card className="w-full max-w-sm">
-				<CardHeader className="items-center text-center">
+				<CardHeader className="justify-items-center text-center">
 					<Logo className="mb-2 h-14 w-14" />
 					<CardTitle>Welcome to VexWave</CardTitle>
 					<CardDescription>

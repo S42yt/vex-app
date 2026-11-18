@@ -37,7 +37,7 @@ export function UploadReviewDialog() {
 			}}
 		>
 			<DialogContent
-				className="max-w-lg"
+				className="sm:max-w-lg"
 				onInteractOutside={(e) => e.preventDefault()}
 			>
 				{head && (

@@ -95,7 +95,7 @@ type DeleteTrackParams struct {
 }
 
 func (l *LibraryService) DeleteTrack(ctx context.Context, p DeleteTrackParams) error {
-	err := l.Store.With(func(c *backend.Client) error { return c.DeleteTrack(ctx, p.ID) })
+	err := l.Store.With(func(c *backend.Client) error { return c.DeleteTrack(ctx, backend.DeleteTrack{ID: p.ID}) })
 	if err == nil {
 		l.URLs.Evict(p.ID)
 	}
@@ -111,7 +111,7 @@ type EditTrackParams struct {
 
 func (l *LibraryService) EditTrack(ctx context.Context, p EditTrackParams) error {
 	return l.Store.With(func(c *backend.Client) error {
-		return c.EditTrack(ctx, backend.EditTrack{ID: p.ID, Title: p.Title, ArtistIDs: p.ArtistIDs, Cover: p.CoverBase64})
+		return c.EditTrack(ctx, backend.EditTrack{ID: p.ID, Title: p.Title, ArtistIDs: deref(p.ArtistIDs), Cover: p.CoverBase64})
 	})
 }
 
@@ -122,7 +122,7 @@ type CreateArtistParams struct {
 
 func (l *LibraryService) CreateArtist(ctx context.Context, p CreateArtistParams) error {
 	return l.Store.With(func(c *backend.Client) error {
-		return c.PostArtist(ctx, backend.PostArtist{Name: p.Name, Image: p.ImageBase64})
+		return c.PostArtist(ctx, backend.CreateArtist{Name: p.Name, Image: p.ImageBase64})
 	})
 }
 
@@ -143,7 +143,7 @@ type DeleteByIDParams struct {
 }
 
 func (l *LibraryService) DeleteArtist(ctx context.Context, p DeleteByIDParams) error {
-	return l.Store.With(func(c *backend.Client) error { return c.DeleteArtist(ctx, p.ID) })
+	return l.Store.With(func(c *backend.Client) error { return c.DeleteArtist(ctx, backend.DeleteByID{ID: p.ID}) })
 }
 
 type CreatePlaylistParams struct {
@@ -154,7 +154,7 @@ type CreatePlaylistParams struct {
 
 func (l *LibraryService) CreatePlaylist(ctx context.Context, p CreatePlaylistParams) error {
 	return l.Store.With(func(c *backend.Client) error {
-		return c.PostPlaylist(ctx, backend.PostPlaylist{Name: p.Name, TrackIDs: p.TrackIDs, Image: p.ImageBase64})
+		return c.PostPlaylist(ctx, backend.CreatePlaylist{Name: p.Name, TrackIDs: p.TrackIDs, Image: p.ImageBase64})
 	})
 }
 
@@ -167,10 +167,17 @@ type EditPlaylistParams struct {
 
 func (l *LibraryService) EditPlaylist(ctx context.Context, p EditPlaylistParams) error {
 	return l.Store.With(func(c *backend.Client) error {
-		return c.EditPlaylist(ctx, backend.EditPlaylist{ID: p.ID, Name: p.Name, TrackIDs: p.TrackIDs, Image: p.ImageBase64})
+		return c.EditPlaylist(ctx, backend.EditPlaylist{ID: p.ID, Name: p.Name, TrackIDs: deref(p.TrackIDs), Image: p.ImageBase64})
 	})
 }
 
 func (l *LibraryService) DeletePlaylist(ctx context.Context, p DeleteByIDParams) error {
-	return l.Store.With(func(c *backend.Client) error { return c.DeletePlaylist(ctx, p.ID) })
+	return l.Store.With(func(c *backend.Client) error { return c.DeletePlaylist(ctx, backend.DeleteByID{ID: p.ID}) })
+}
+
+func deref[T any](p *[]T) []T {
+	if p == nil {
+		return nil
+	}
+	return *p
 }

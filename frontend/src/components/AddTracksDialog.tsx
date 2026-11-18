@@ -58,7 +58,7 @@ export function AddTracksDialog({
 				onOpenChange(next);
 			}}
 		>
-			<DialogContent className="max-w-md">
+			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>Add tracks</DialogTitle>
 					<DialogDescription>

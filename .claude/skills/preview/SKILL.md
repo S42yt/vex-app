@@ -40,6 +40,7 @@ detail view and writes `playlists-1.png`.
 | --- | --- |
 | `--out=preview` | where the PNGs go. `--out=assets` when they're being kept. |
 | `--scale=1.5` | 1.5 → 1800×1188 |
+| `--zoom=1` | lays the app out in a window this many times smaller at the same output size, so the UI reads bigger. `--zoom=1.2` for the README shots |
 | `--no-check` | skip the type-check (below). Only while iterating. |
 | `--keep` | leave the harness in `frontend/src/` and the vite URL usable, to poke at |
 | `--still` | freeze the now-playing bars, which is what makes a render byte-reproducible |
@@ -68,15 +69,12 @@ project the library through those indices, which `LibraryService` builds from a
 real payload and so are empty behind a stubbed snapshot.
 
 The type-check is the safety net for all of this, which is why it is on by
-default: the harness is copied into `frontend/src/` for the run, so `tsc` sees it
+default: the harness is copied into `frontend/src/` for the run, so `bun check` sees it
 against the app's real types and a store that changed shape is a compile error
 rather than a wrong picture.
 
 Conventions worth keeping: names fictional, and artwork as **gradient SVG data
-URIs** — no network, nothing copyrighted, and `crossOrigin="anonymous"` on a
-`data:` URL still leaves the canvas `lib/coverFit.ts` reads back untainted.
-`still()` and `artTrack()` are a pair, so a Discover preview can show both
-branches of that measurement.
+URIs** — no network, nothing copyrighted.
 
 ## How the picture is made
 
@@ -102,8 +100,8 @@ be a coin toss. Keyframe animations are left alone.
 ## What the script checks, and what it can't
 
 Per shot: the file exists, is `rgba`, is the expected size, has a **transparent
-corner** (an opaque one means the backdrop broke), and the DOM contains the app
-bar's log-out action — which proves `<App/>` mounted rather than the page being
+corner** (an opaque one means the backdrop broke), and the DOM contains the
+sidebar's log-out action — which proves `<App/>` mounted rather than the page being
 blank or thrown. It also reports if the app's window size in `main.go`
 has drifted from what the harness frames.
 

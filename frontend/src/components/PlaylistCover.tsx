@@ -30,7 +30,7 @@ export function PlaylistCover({
 	return (
 		<div
 			className={cn(
-				"relative overflow-hidden rounded-md bg-muted shadow-sm ring-1 ring-inset ring-border/60",
+				"relative overflow-hidden rounded-md bg-muted shadow-xs ring-1 ring-inset ring-border/60",
 				className,
 			)}
 		>
